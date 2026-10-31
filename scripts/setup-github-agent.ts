@@ -18,6 +18,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -25,6 +26,7 @@ import { join } from "node:path";
 const KEY_TITLE = "agent_key";
 const KEY_PATH = join(homedir(), ".ssh", KEY_TITLE);
 const SSH_CONFIG_PATH = join(homedir(), ".ssh", "config");
+const BASHRC_PATH = join(homedir(), ".bashrc");
 // Repositories live in their own folder under /app/<repo>: the bare clone at
 // /app/<repo>/<repo>.git and the worktrees for the default and additional
 // branches as siblings of the bare clone, e.g. /app/<repo>/<branch>.
@@ -208,6 +210,43 @@ const configureGitIdentity = async (
   log.success(
     `Configured git identity as ${identity.username} <${noreplyEmail}>`,
   );
+};
+
+/**
+ * Persist the git identity as GIT_AUTHOR_* and GIT_COMMITTER_* environment
+ * variables in ~/.bashrc so every future shell (e.g. pi started later)
+ * attributes commits to the token's owner, even when git config is not
+ * picked up. Existing export lines for these variables are replaced, so
+ * re-running setup with a different account updates the values.
+ *
+ * @param identity - Authenticated username and numeric GitHub id.
+ */
+const configureGitEnvVars = (identity: GitHubIdentity): void => {
+  const noreplyEmail = `${identity.id}+${identity.username}@users.noreply.github.com`;
+  const exportsToSet: ReadonlyArray<readonly [string, string]> = [
+    ["GIT_AUTHOR_NAME", identity.username],
+    ["GIT_COMMITTER_NAME", identity.username],
+    ["GIT_AUTHOR_EMAIL", noreplyEmail],
+    ["GIT_COMMITTER_EMAIL", noreplyEmail],
+  ];
+  const existing = existsSync(BASHRC_PATH)
+    ? readFileSync(BASHRC_PATH, "utf8")
+    : "";
+  const keptLines = existing
+    .split("\n")
+    .filter(
+      (line) =>
+        !exportsToSet.some(([name]) => line.startsWith(`export ${name}=`)),
+    );
+  while (keptLines.length > 0 && keptLines[keptLines.length - 1] === "") {
+    keptLines.pop();
+  }
+  const exportLines = exportsToSet
+    .map(([name, value]) => `export ${name}="${value}"`)
+    .join("\n");
+  const prefix = keptLines.length > 0 ? `${keptLines.join("\n")}\n\n` : "";
+  writeFileSync(BASHRC_PATH, `${prefix}${exportLines}\n`);
+  log.success(`Exported git identity variables in ${BASHRC_PATH}`);
 };
 
 /**
@@ -485,6 +524,9 @@ const main = async (): Promise<void> => {
 
   progress.message("Configuring git identity");
   await configureGitIdentity(identity);
+
+  progress.message("Persisting git identity environment variables");
+  configureGitEnvVars(identity);
 
   progress.message("Configuring git SSH command");
   await configureGitSshCommand();
