@@ -26,7 +26,7 @@ build: ## Build agent Docker image (bakes in the setup-agent script)
 		--no-cache \
 		--pull \
 		-t $(IMAGE_AGENT) \
-		-f Dockerfile.agent .
+		-f Dockerfile .
 
 run: ## Start agent container (no host code mounted; provision inside via setup-agent)
 	docker run \
