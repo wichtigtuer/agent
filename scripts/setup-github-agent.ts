@@ -25,8 +25,9 @@ import { join } from "node:path";
 const KEY_TITLE = "agent_key";
 const KEY_PATH = join(homedir(), ".ssh", KEY_TITLE);
 const SSH_CONFIG_PATH = join(homedir(), ".ssh", "config");
-// Worktrees live directly in /app inside the container: the bare clone at
-// /app/<repo>.git and the default-branch worktree at /app/<branch>.
+// Repositories live in their own folder under /app/<repo>: the bare clone at
+// /app/<repo>/<repo>.git and the worktrees for the default and additional
+// branches as siblings of the bare clone, e.g. /app/<repo>/<branch>.
 const REPOS_DIR = "/app";
 // clack leaves several keypress listeners attached across prompts and the
 // spinner; raise the limit to avoid a noisy MaxListenersExceededWarning in
@@ -291,6 +292,15 @@ const repoNameOf = (slug: RepoSlug): string => {
 };
 
 /**
+ * Per-repository folder that keeps every clone self-contained, so
+ * different repos never share or collide inside /app.
+ *
+ * @param slug - Validated repository slug.
+ * @returns Absolute path of the repo's folder (/app/<repo>).
+ */
+const repoDirOf = (slug: RepoSlug): string => join(REPOS_DIR, repoNameOf(slug));
+
+/**
  * Check whether a bare repository holds at least one ref, i.e. its clone
  * completed. A clone killed mid-fetch leaves a directory with no refs.
  *
@@ -307,14 +317,15 @@ const bareRepoHasRefs = async (barePath: string): Promise<boolean> => {
 };
 
 /**
- * Clone the repository as a bare repository into REPOS_DIR/<name>.git,
+ * Clone the repository as a bare repository into /app/<name>/<name>.git,
  * reusing the clone when it already exists.
  *
  * @param slug - Repository to clone.
  * @returns Path of the bare repository.
  */
 const cloneBareRepo = async (slug: RepoSlug): Promise<string> => {
-  const barePath = join(REPOS_DIR, `${repoNameOf(slug)}.git`);
+  const repoDir = repoDirOf(slug);
+  const barePath = join(repoDir, `${repoNameOf(slug)}.git`);
   if (existsSync(barePath)) {
     if (await bareRepoHasRefs(barePath)) {
       log.info(`Reusing existing bare repository at ${barePath}`);
@@ -323,7 +334,7 @@ const cloneBareRepo = async (slug: RepoSlug): Promise<string> => {
     log.warn(`Removing incomplete bare repository at ${barePath}`);
     rmSync(barePath, { recursive: true, force: true });
   }
-  mkdirSync(REPOS_DIR, { recursive: true });
+  mkdirSync(repoDir, { recursive: true });
   await run("git", ["clone", "--bare", `git@github.com:${slug}.git`, barePath]);
   log.success(`Cloned ${slug} as a bare repository at ${barePath}`);
   return barePath;
@@ -349,7 +360,7 @@ const addDefaultBranchWorktree = async (
     "--jq",
     ".defaultBranchRef.name",
   ]);
-  const worktreePath = join(REPOS_DIR, defaultBranch);
+  const worktreePath = join(repoDirOf(slug), defaultBranch);
   if (existsSync(worktreePath)) {
     log.info(`Reusing existing worktree at ${worktreePath}`);
     return;
