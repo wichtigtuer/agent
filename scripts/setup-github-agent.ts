@@ -18,6 +18,7 @@ import {
   mkdirSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -25,8 +26,10 @@ import { join } from "node:path";
 const KEY_TITLE = "agent_key";
 const KEY_PATH = join(homedir(), ".ssh", KEY_TITLE);
 const SSH_CONFIG_PATH = join(homedir(), ".ssh", "config");
-// Worktrees live directly in /app inside the container: the bare clone at
-// /app/<repo>.git and the default-branch worktree at /app/<branch>.
+const BASHRC_PATH = join(homedir(), ".bashrc");
+// Repositories live in their own folder under /app/<repo>: the bare clone at
+// /app/<repo>/<repo>.git and the worktrees for the default and additional
+// branches as siblings of the bare clone, e.g. /app/<repo>/<branch>.
 const REPOS_DIR = "/app";
 // clack leaves several keypress listeners attached across prompts and the
 // spinner; raise the limit to avoid a noisy MaxListenersExceededWarning in
@@ -210,6 +213,43 @@ const configureGitIdentity = async (
 };
 
 /**
+ * Persist the git identity as GIT_AUTHOR_* and GIT_COMMITTER_* environment
+ * variables in ~/.bashrc so every future shell (e.g. pi started later)
+ * attributes commits to the token's owner, even when git config is not
+ * picked up. Existing export lines for these variables are replaced, so
+ * re-running setup with a different account updates the values.
+ *
+ * @param identity - Authenticated username and numeric GitHub id.
+ */
+const configureGitEnvVars = (identity: GitHubIdentity): void => {
+  const noreplyEmail = `${identity.id}+${identity.username}@users.noreply.github.com`;
+  const exportsToSet: ReadonlyArray<readonly [string, string]> = [
+    ["GIT_AUTHOR_NAME", identity.username],
+    ["GIT_COMMITTER_NAME", identity.username],
+    ["GIT_AUTHOR_EMAIL", noreplyEmail],
+    ["GIT_COMMITTER_EMAIL", noreplyEmail],
+  ];
+  const existing = existsSync(BASHRC_PATH)
+    ? readFileSync(BASHRC_PATH, "utf8")
+    : "";
+  const keptLines = existing
+    .split("\n")
+    .filter(
+      (line) =>
+        !exportsToSet.some(([name]) => line.startsWith(`export ${name}=`)),
+    );
+  while (keptLines.length > 0 && keptLines[keptLines.length - 1] === "") {
+    keptLines.pop();
+  }
+  const exportLines = exportsToSet
+    .map(([name, value]) => `export ${name}="${value}"`)
+    .join("\n");
+  const prefix = keptLines.length > 0 ? `${keptLines.join("\n")}\n\n` : "";
+  writeFileSync(BASHRC_PATH, `${prefix}${exportLines}\n`);
+  log.success(`Exported git identity variables in ${BASHRC_PATH}`);
+};
+
+/**
  * Prompt for a link to the GitHub repository to clone.
  *
  * @returns The validated `owner/repo` slug parsed from the link.
@@ -291,6 +331,15 @@ const repoNameOf = (slug: RepoSlug): string => {
 };
 
 /**
+ * Per-repository folder that keeps every clone self-contained, so
+ * different repos never share or collide inside /app.
+ *
+ * @param slug - Validated repository slug.
+ * @returns Absolute path of the repo's folder (/app/<repo>).
+ */
+const repoDirOf = (slug: RepoSlug): string => join(REPOS_DIR, repoNameOf(slug));
+
+/**
  * Check whether a bare repository holds at least one ref, i.e. its clone
  * completed. A clone killed mid-fetch leaves a directory with no refs.
  *
@@ -307,14 +356,15 @@ const bareRepoHasRefs = async (barePath: string): Promise<boolean> => {
 };
 
 /**
- * Clone the repository as a bare repository into REPOS_DIR/<name>.git,
+ * Clone the repository as a bare repository into /app/<name>/<name>.git,
  * reusing the clone when it already exists.
  *
  * @param slug - Repository to clone.
  * @returns Path of the bare repository.
  */
 const cloneBareRepo = async (slug: RepoSlug): Promise<string> => {
-  const barePath = join(REPOS_DIR, `${repoNameOf(slug)}.git`);
+  const repoDir = repoDirOf(slug);
+  const barePath = join(repoDir, `${repoNameOf(slug)}.git`);
   if (existsSync(barePath)) {
     if (await bareRepoHasRefs(barePath)) {
       log.info(`Reusing existing bare repository at ${barePath}`);
@@ -323,7 +373,7 @@ const cloneBareRepo = async (slug: RepoSlug): Promise<string> => {
     log.warn(`Removing incomplete bare repository at ${barePath}`);
     rmSync(barePath, { recursive: true, force: true });
   }
-  mkdirSync(REPOS_DIR, { recursive: true });
+  mkdirSync(repoDir, { recursive: true });
   await run("git", ["clone", "--bare", `git@github.com:${slug}.git`, barePath]);
   log.success(`Cloned ${slug} as a bare repository at ${barePath}`);
   return barePath;
@@ -349,7 +399,7 @@ const addDefaultBranchWorktree = async (
     "--jq",
     ".defaultBranchRef.name",
   ]);
-  const worktreePath = join(REPOS_DIR, defaultBranch);
+  const worktreePath = join(repoDirOf(slug), defaultBranch);
   if (existsSync(worktreePath)) {
     log.info(`Reusing existing worktree at ${worktreePath}`);
     return;
@@ -474,6 +524,9 @@ const main = async (): Promise<void> => {
 
   progress.message("Configuring git identity");
   await configureGitIdentity(identity);
+
+  progress.message("Persisting git identity environment variables");
+  configureGitEnvVars(identity);
 
   progress.message("Configuring git SSH command");
   await configureGitSshCommand();
