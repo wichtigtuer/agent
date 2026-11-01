@@ -53,6 +53,10 @@ RUN printf '#!/bin/sh\nexec node --experimental-strip-types /opt/penfold/setup-g
 
 WORKDIR /app
 
+# Bake agent skills into the node user's home directory
+COPY .agents/skills /home/node/.agents/skills
+RUN chown -R node:node /home/node/.agents
+
 USER node
 
 ENV PATH="/home/node/.local/bin:${PATH}"
