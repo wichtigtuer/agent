@@ -3,8 +3,7 @@
 Dockerized coding-agent environment: a Node 24 image with git, gh, pnpm,
 Playwright, and the [Pi Coding Agent](https://github.com/earendil-works/pi)
 preinstalled, plus a baked-in `setup-agent` script that provisions GitHub
-authentication (PAT → SSH key → bare clone + worktree layout) inside the
-container.
+authentication (PAT → SSH key → repository clone) inside the container.
 
 ## Prerequisites
 
@@ -36,35 +35,43 @@ Rebuild with a fresh base image and reinstall all tools, then restart the
 container:
 
 ```sh
-make stop
+make stop NAME=myrepo
 make build
-make run
+make run NAME=myrepo
 ```
 
 The build uses `--no-cache --pull`, so every rebuild picks up the latest
 `node:24-slim` base image, apt packages, pnpm, Playwright browsers, and the
 newest `@earendil-works/pi-coding-agent`. Named volumes
-(`penfold-gh-config`, `penfold-pi-config`, `penfold-worktrees`) persist your
-gh/pi config and `/app` worktrees across rebuilds.
+(`penfold-gh-config`, `penfold-pi-config`, `penfold-worktrees-<name>`)
+persist your gh/pi config and `/app` repositories across rebuilds.
 
 ## Use
 
-Typical workflow (see `make help` for all targets):
+Every container action takes a `NAME` (e.g. the repository name). It names
+the container (`penfold-agent-<name>`) and its dedicated `/app` volume
+(`penfold-worktrees-<name>`), so containers started with different names run
+in parallel: each gets an isolated `/app`, while gh config, pi config and
+the `./secrets` SSH keys stay shared across all of them. Typical workflow
+(see `make help` for all targets):
 
 ```sh
-make run     # 1. Start the container (detached, --rm, named penfold-agent)
-make setup   # 2. Run the baked-in GitHub setup wizard inside the container
-make pi      # 3. Launch pi in a tmux session inside the container
+make run NAME=myrepo    # 1. Start the container (detached, --rm)
+make setup NAME=myrepo  # 2. Run the baked-in GitHub setup wizard inside the container
+make pi NAME=myrepo     # 3. Launch pi in a tmux session inside the container
 ```
 
-- `make run` — starts the container with volumes for gh config, pi config,
-  worktrees (`/app`), and your `./secrets` SSH keys.
-- `make setup` — runs `setup-agent` (from `scripts/setup-github-agent.ts`):
-  prompts for a GitHub PAT, generates an ed25519 SSH key, uploads it to
-  GitHub, configures git identity + SSH, and optionally clones a repository
-  as a bare repo at `/app/<repo>.git` with a default-branch worktree at
-  `/app/<branch>`.
-- `make pi` — runs the Pi Coding Agent in a tmux session
+- `make run NAME=<repo>` — starts the container with volumes for gh config,
+  pi config, repositories (`/app`, dedicated to this NAME), and your
+  `./secrets` SSH keys.
+- `make setup NAME=<repo>` — runs `setup-agent` (from
+  `scripts/setup-github-agent.ts`): prompts for a GitHub PAT, generates an
+  ed25519 SSH key, uploads it to GitHub, configures git identity + SSH, and
+  optionally clones a repository into `/app/<repo>` as a regular checkout of
+  the default branch (additional branch worktrees go inside the checkout at
+  `/app/<repo>/<branch>`).
+- `make pi NAME=<repo>` — runs the Pi Coding Agent in a tmux session
   (`PI_AGENT_API_KEY` is forwarded from the host).
-- `make shell` — opens a bash shell in the container.
-- `make stop` — stops the container (it is removed automatically via `--rm`).
+- `make shell NAME=<repo>` — opens a bash shell in the container.
+- `make stop NAME=<repo>` — stops the container (it is removed automatically
+  via `--rm`).

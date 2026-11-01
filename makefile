@@ -1,13 +1,26 @@
 REVISION ?= latest
+NAME ?=
+
 IMAGE_AGENT := penfold-agent:$(REVISION)
-CONTAINER_AGENT := penfold-agent
+CONTAINER_AGENT := penfold-agent-$(NAME)
+
+# Every container action requires NAME (e.g. the repository name). It names
+# the container and its dedicated /app volume, so containers started with
+# different names run in parallel: each gets an isolated /app, while gh
+# config, pi config and the SSH keys stay shared across all of them.
+NAME_REQUIRED_TARGETS := $(filter-out help build,$(MAKECMDGOALS))
+ifneq ($(NAME_REQUIRED_TARGETS),)
+ifeq ($(strip $(NAME)),)
+$(error NAME is required, e.g. `make run NAME=myrepo` — it names the container and its dedicated /app volume)
+endif
+endif
 
 DOCKER_RUN_ARGS := \
 	-dit \
 	--rm \
 	-v penfold-gh-config:/home/node/.config \
 	-v penfold-pi-config:/home/node/.pi \
-	-v penfold-worktrees:/app \
+	-v penfold-worktrees-$(NAME):/app \
 	-v "$$(pwd)/secrets:/home/node/.ssh" \
 	--name $(CONTAINER_AGENT)
 
@@ -28,7 +41,7 @@ build: ## Build agent Docker image (bakes in the setup-agent script)
 		-t $(IMAGE_AGENT) \
 		-f Dockerfile .
 
-run: ## Start agent container (no host code mounted; provision inside via setup-agent)
+run: ## Start named agent container: make run NAME=<repo> (no host code mounted; provision inside via setup-agent)
 	docker run \
 		$(DOCKER_RUN_ARGS) \
 		$(IMAGE_AGENT) \

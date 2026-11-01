@@ -17,6 +17,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -27,9 +28,9 @@ const KEY_TITLE = "agent_key";
 const KEY_PATH = join(homedir(), ".ssh", KEY_TITLE);
 const SSH_CONFIG_PATH = join(homedir(), ".ssh", "config");
 const BASHRC_PATH = join(homedir(), ".bashrc");
-// Repositories live in their own folder under /app/<repo>: the bare clone at
-// /app/<repo>/<repo>.git and the worktrees for the default and additional
-// branches as siblings of the bare clone, e.g. /app/<repo>/<branch>.
+// Repositories are cloned directly under /app/<repo> as regular checkouts
+// of the default branch; additional branch worktrees are added inside the
+// checkout at /app/<repo>/<branch>.
 const REPOS_DIR = "/app";
 // clack leaves several keypress listeners attached across prompts and the
 // spinner; raise the limit to avoid a noisy MaxListenersExceededWarning in
@@ -340,15 +341,15 @@ const repoNameOf = (slug: RepoSlug): string => {
 const repoDirOf = (slug: RepoSlug): string => join(REPOS_DIR, repoNameOf(slug));
 
 /**
- * Check whether a bare repository holds at least one ref, i.e. its clone
+ * Check whether a repository holds at least one ref, i.e. its clone
  * completed. A clone killed mid-fetch leaves a directory with no refs.
  *
- * @param barePath - Path of the bare repository.
+ * @param repoDir - Path of the repository checkout.
  * @returns True when the repository has refs.
  */
-const bareRepoHasRefs = async (barePath: string): Promise<boolean> => {
+const repoHasRefs = async (repoDir: string): Promise<boolean> => {
   try {
-    await run("git", ["-C", barePath, "show-ref", "-q"]);
+    await run("git", ["-C", repoDir, "show-ref", "-q"]);
     return true;
   } catch {
     return false;
@@ -356,63 +357,31 @@ const bareRepoHasRefs = async (barePath: string): Promise<boolean> => {
 };
 
 /**
- * Clone the repository as a bare repository into /app/<name>/<name>.git,
- * reusing the clone when it already exists.
+ * Clone the repository into /app/<repo> as a regular checkout of the
+ * default branch, reusing the clone when it already exists. Additional
+ * branch worktrees are added later inside the checkout at
+ * /app/<repo>/<branch>.
  *
  * @param slug - Repository to clone.
- * @returns Path of the bare repository.
+ * @returns Path of the checkout.
  */
-const cloneBareRepo = async (slug: RepoSlug): Promise<string> => {
+const cloneRepo = async (slug: RepoSlug): Promise<string> => {
   const repoDir = repoDirOf(slug);
-  const barePath = join(repoDir, `${repoNameOf(slug)}.git`);
-  if (existsSync(barePath)) {
-    if (await bareRepoHasRefs(barePath)) {
-      log.info(`Reusing existing bare repository at ${barePath}`);
-      return barePath;
+  if (existsSync(join(repoDir, ".git"))) {
+    if (await repoHasRefs(repoDir)) {
+      log.info(`Reusing existing repository at ${repoDir}`);
+      return repoDir;
     }
-    log.warn(`Removing incomplete bare repository at ${barePath}`);
-    rmSync(barePath, { recursive: true, force: true });
+    log.warn(`Removing incomplete repository at ${repoDir}`);
+    rmSync(repoDir, { recursive: true, force: true });
+  } else if (existsSync(repoDir) && readdirSync(repoDir).length > 0) {
+    throw new Error(
+      `${repoDir} exists but is not a git repository; move it aside or remove it`,
+    );
   }
-  mkdirSync(repoDir, { recursive: true });
-  await run("git", ["clone", "--bare", `git@github.com:${slug}.git`, barePath]);
-  log.success(`Cloned ${slug} as a bare repository at ${barePath}`);
-  return barePath;
-};
-
-/**
- * Add a worktree for the repository's default branch as a sibling of the
- * bare clone, reusing the worktree when it already exists.
- *
- * @param slug - Repository whose default branch is resolved via gh.
- * @param barePath - Path of the bare repository.
- */
-const addDefaultBranchWorktree = async (
-  slug: RepoSlug,
-  barePath: string,
-): Promise<void> => {
-  const defaultBranch = await run("gh", [
-    "repo",
-    "view",
-    slug,
-    "--json",
-    "defaultBranchRef",
-    "--jq",
-    ".defaultBranchRef.name",
-  ]);
-  const worktreePath = join(repoDirOf(slug), defaultBranch);
-  if (existsSync(worktreePath)) {
-    log.info(`Reusing existing worktree at ${worktreePath}`);
-    return;
-  }
-  await run("git", [
-    "-C",
-    barePath,
-    "worktree",
-    "add",
-    worktreePath,
-    defaultBranch,
-  ]);
-  log.success(`Added worktree for ${defaultBranch} at ${worktreePath}`);
+  await run("git", ["clone", `git@github.com:${slug}.git`, repoDir]);
+  log.success(`Cloned ${slug} into ${repoDir}`);
+  return repoDir;
 };
 
 /**
@@ -502,8 +471,7 @@ const main = async (): Promise<void> => {
   const token = await promptForToken();
 
   const wantsClone = await confirm({
-    message:
-      "Clone a repository as a bare repo with a default-branch worktree?",
+    message: "Clone a repository into /app (default branch checked out)?",
     initialValue: true,
   });
   if (isCancel(wantsClone)) {
@@ -536,9 +504,7 @@ const main = async (): Promise<void> => {
 
   if (slug !== undefined) {
     progress.message(`Cloning ${slug}`);
-    const barePath = await cloneBareRepo(slug);
-    progress.message("Adding worktree for the default branch");
-    await addDefaultBranchWorktree(slug, barePath);
+    await cloneRepo(slug);
   }
   progress.stop("All done");
 
