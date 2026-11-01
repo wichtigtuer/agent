@@ -1,7 +1,7 @@
 # agent
 
 Dockerized coding-agent environment: a Node 24 image with git, gh, pnpm,
-Playwright, and the [Pi Coding Agent](https://github.com/earendil-works/pi-coding-agent)
+Playwright, and the [Pi Coding Agent](https://github.com/earendil-works/pi)
 preinstalled, plus a baked-in `setup-agent` script that provisions GitHub
 authentication (PAT → SSH key → bare clone + worktree layout) inside the
 container.
