@@ -52,7 +52,21 @@ git worktree add ../main main
 The branch (`main` here) must already exist in the cloned repository. If the
 default branch has another name, use that instead.
 
-### 3. Create additional worktrees
+### 3. Update the main worktree before creating new worktrees
+
+**Always** bring the default-branch worktree up to date with the remote
+before branching a new worktree off it. Otherwise the new branch starts from
+a stale commit and needs an immediate rebase or merge:
+
+```bash
+cd my-project/my-project.git
+git fetch origin
+git -C ../main merge --ff-only FETCH_HEAD
+```
+
+Only after the main worktree is current should you create the new worktree.
+
+### 4. Create additional worktrees
 
 Existing branch:
 
@@ -60,7 +74,7 @@ Existing branch:
 git worktree add ../feature feature
 ```
 
-New branch (branched from `main`):
+New branch (branched from the freshly updated `main`):
 
 ```bash
 git worktree add -b feature-new ../feature-new main
@@ -111,6 +125,9 @@ repository's remote-tracking references.
   branch (or use `--detach`) for the second working directory instead.
 - Never run `git worktree remove` on a worktree with uncommitted changes you
   intend to keep; check `git status` in that directory first.
+- Never create a worktree from `main` without first fetching and fast-forwarding
+  the main worktree to the latest remote state; branching off a stale commit
+  causes avoidable conflicts and rebases later.
 - Keep the bare clone and all its worktrees inside the same per-repo folder;
   never place worktrees from different repos in a shared parent directory,
   or branch names will collide (two repos with a `main` worktree cannot both
@@ -135,6 +152,11 @@ git clone --bare https://github.com/user/my-project.git my-project/my-project.gi
 # Create working directories
 cd my-project/my-project.git
 git worktree add ../main main
+
+# Always update main from the remote before branching new worktrees off it
+git fetch origin
+git -C ../main merge --ff-only FETCH_HEAD
+
 git worktree add -b feature ../feature main
 
 # List worktrees
