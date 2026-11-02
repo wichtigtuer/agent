@@ -39,7 +39,20 @@ git clone https://github.com/user/my-project.git /app
 The clone checks out the default branch automatically; no further step is
 needed for it.
 
-### 2. Create additional worktrees
+### 2. Update the default branch before creating new worktrees
+
+**Always** bring the default branch up to date with the remote before
+branching a new worktree off it. Otherwise the new branch starts from
+a stale commit and needs an immediate rebase or merge:
+
+```bash
+cd /app
+git pull --ff-only
+```
+
+Only after the default branch is current should you create the new worktree.
+
+### 3. Create additional worktrees
 
 Worktrees are added from inside the clone, with the branch name as the
 directory name so they stay inside the repo directory:
@@ -54,7 +67,7 @@ Existing branch:
 git worktree add feature feature
 ```
 
-New branch (branched from `main`):
+New branch (branched from the freshly updated `main`):
 
 ```bash
 git worktree add -b feature-new feature-new main
@@ -103,6 +116,9 @@ for the whole repository; every other worktree sees them immediately.
   `.git/info/exclude` (local, not committed) if the noise bothers you.
 - Never run `git worktree remove` on a worktree with uncommitted changes
   you intend to keep; check `git status` in that directory first.
+- Never create a worktree from the default branch without first fetching
+  and fast-forwarding it to the latest remote state; branching off a stale
+  commit causes avoidable conflicts and rebases later.
 - Keep worktrees inside the clone at `/app`; since `/app` holds a single
   repository, worktree directory names are branch names and stay unique.
 
@@ -112,6 +128,9 @@ for the whole repository; every other worktree sees them immediately.
 # Clone once; the default branch is checked out immediately
 git clone https://github.com/user/my-project.git /app
 cd /app
+
+# Always update the default branch from the remote before branching off it
+git pull --ff-only
 
 # Add a worktree for another branch, inside the checkout
 git worktree add -b feature feature main
