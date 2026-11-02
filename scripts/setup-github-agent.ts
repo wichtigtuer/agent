@@ -17,20 +17,26 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const KEY_TITLE = "agent_key";
-const KEY_PATH = join(homedir(), ".ssh", KEY_TITLE);
 const SSH_CONFIG_PATH = join(homedir(), ".ssh", "config");
 const BASHRC_PATH = join(homedir(), ".bashrc");
-// Repositories live in their own folder under /app/<repo>: the bare clone at
-// /app/<repo>/<repo>.git and the worktrees for the default and additional
-// branches as siblings of the bare clone, e.g. /app/<repo>/<branch>.
+// The repository is cloned directly into /app as a regular checkout of the
+// default branch; additional branch worktrees are added inside the
+// checkout at /app/<branch>.
 const REPOS_DIR = "/app";
+// The agent name (usually the repository name) scopes the SSH key both
+// locally (~/.ssh/agent_key_<name>) and on GitHub (title "agent_key_<name>"),
+// so containers started for different repos each own a distinct key pair in
+// the same GitHub account. The makefile passes its NAME through this
+// environment variable.
+const AGENT_NAME_ENV = "AGENT_NAME";
+const AGENT_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 // clack leaves several keypress listeners attached across prompts and the
 // spinner; raise the limit to avoid a noisy MaxListenersExceededWarning in
 // this short-lived CLI.
@@ -283,32 +289,36 @@ const promptForRepoLink = async (): Promise<RepoSlug> => {
  * relying on ~/.ssh/config entries. `accept-new` trusts new host keys
  * non-interactively (TOFU) so the first clone cannot hang on ssh's
  * host-key confirmation prompt, while changed keys are still rejected.
+ *
+ * @param key - Name-scoped agent key.
  */
-const configureGitSshCommand = async (): Promise<void> => {
+const configureGitSshCommand = async (key: AgentKey): Promise<void> => {
   await run("git", [
     "config",
     "--global",
     "core.sshCommand",
-    `ssh -i ${KEY_PATH} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new`,
+    `ssh -i ${key.path} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new`,
   ]);
-  log.success(`Configured git to use ${KEY_PATH} for SSH`);
+  log.success(`Configured git to use ${key.path} for SSH`);
 };
 
 /**
  * Ensure ~/.ssh/config routes github.com through the agent key so plain
  * ssh (e.g. `ssh -T git@github.com`) authenticates without extra flags.
  * Appends the host block unless the key is already referenced.
+ *
+ * @param key - Name-scoped agent key.
  */
-const configureSshConfig = (): void => {
+const configureSshConfig = (key: AgentKey): void => {
   const hostBlock = [
     `Host github.com`,
-    `  IdentityFile ${KEY_PATH}`,
+    `  IdentityFile ${key.path}`,
     `  IdentitiesOnly yes`,
   ].join("\n");
   const existing = existsSync(SSH_CONFIG_PATH)
     ? readFileSync(SSH_CONFIG_PATH, "utf8")
     : "";
-  if (existing.includes(KEY_PATH)) {
+  if (existing.includes(key.path)) {
     log.info(`Reusing existing github.com entry in ${SSH_CONFIG_PATH}`);
     return;
   }
@@ -320,35 +330,15 @@ const configureSshConfig = (): void => {
 };
 
 /**
- * Short repository name — the part after the slash in `owner/repo`.
- *
- * @param slug - Validated repository slug.
- * @returns The repository name.
- */
-const repoNameOf = (slug: RepoSlug): string => {
-  const segments = slug.split("/");
-  return segments[segments.length - 1] ?? slug;
-};
-
-/**
- * Per-repository folder that keeps every clone self-contained, so
- * different repos never share or collide inside /app.
- *
- * @param slug - Validated repository slug.
- * @returns Absolute path of the repo's folder (/app/<repo>).
- */
-const repoDirOf = (slug: RepoSlug): string => join(REPOS_DIR, repoNameOf(slug));
-
-/**
- * Check whether a bare repository holds at least one ref, i.e. its clone
+ * Check whether a repository holds at least one ref, i.e. its clone
  * completed. A clone killed mid-fetch leaves a directory with no refs.
  *
- * @param barePath - Path of the bare repository.
+ * @param repoDir - Path of the repository checkout.
  * @returns True when the repository has refs.
  */
-const bareRepoHasRefs = async (barePath: string): Promise<boolean> => {
+const repoHasRefs = async (repoDir: string): Promise<boolean> => {
   try {
-    await run("git", ["-C", barePath, "show-ref", "-q"]);
+    await run("git", ["-C", repoDir, "show-ref", "-q"]);
     return true;
   } catch {
     return false;
@@ -356,117 +346,194 @@ const bareRepoHasRefs = async (barePath: string): Promise<boolean> => {
 };
 
 /**
- * Clone the repository as a bare repository into /app/<name>/<name>.git,
- * reusing the clone when it already exists.
+ * Clone the repository directly into /app as a regular checkout of the
+ * default branch, reusing the clone when it already exists. Additional
+ * branch worktrees are added later inside the checkout at /app/<branch>.
+ * git accepts an existing empty directory as the clone target, so a fresh
+ * volume works; a non-empty /app that is not a repository is rejected with
+ * guidance instead of being overwritten.
  *
  * @param slug - Repository to clone.
- * @returns Path of the bare repository.
+ * @returns Path of the checkout.
  */
-const cloneBareRepo = async (slug: RepoSlug): Promise<string> => {
-  const repoDir = repoDirOf(slug);
-  const barePath = join(repoDir, `${repoNameOf(slug)}.git`);
-  if (existsSync(barePath)) {
-    if (await bareRepoHasRefs(barePath)) {
-      log.info(`Reusing existing bare repository at ${barePath}`);
-      return barePath;
+const cloneRepo = async (slug: RepoSlug): Promise<string> => {
+  const repoDir = REPOS_DIR;
+  if (existsSync(join(repoDir, ".git"))) {
+    if (await repoHasRefs(repoDir)) {
+      log.info(`Reusing existing repository at ${repoDir}`);
+      return repoDir;
     }
-    log.warn(`Removing incomplete bare repository at ${barePath}`);
-    rmSync(barePath, { recursive: true, force: true });
+    log.warn(`Removing incomplete repository at ${repoDir}`);
+    // /app may be a volume mount point, so empty it instead of removing
+    // the directory itself (rmdir of a mount fails with EBUSY).
+    for (const entry of readdirSync(repoDir)) {
+      rmSync(join(repoDir, entry), { recursive: true, force: true });
+    }
+  } else if (existsSync(repoDir) && readdirSync(repoDir).length > 0) {
+    throw new Error(
+      `${repoDir} exists but is not a git repository; move it aside or remove it`,
+    );
   }
-  mkdirSync(repoDir, { recursive: true });
-  await run("git", ["clone", "--bare", `git@github.com:${slug}.git`, barePath]);
-  log.success(`Cloned ${slug} as a bare repository at ${barePath}`);
-  return barePath;
+  await run("git", ["clone", `git@github.com:${slug}.git`, repoDir]);
+  log.success(`Cloned ${slug} into ${repoDir}`);
+  return repoDir;
 };
 
 /**
- * Add a worktree for the repository's default branch as a sibling of the
- * bare clone, reusing the worktree when it already exists.
- *
- * @param slug - Repository whose default branch is resolved via gh.
- * @param barePath - Path of the bare repository.
+ * Per-agent SSH key identity. The name scopes the local key files and the
+ * GitHub key title, so containers for different repos each get their own
+ * key pair in the same GitHub account.
  */
-const addDefaultBranchWorktree = async (
-  slug: RepoSlug,
-  barePath: string,
-): Promise<void> => {
-  const defaultBranch = await run("gh", [
-    "repo",
-    "view",
-    slug,
-    "--json",
-    "defaultBranchRef",
-    "--jq",
-    ".defaultBranchRef.name",
-  ]);
-  const worktreePath = join(repoDirOf(slug), defaultBranch);
-  if (existsSync(worktreePath)) {
-    log.info(`Reusing existing worktree at ${worktreePath}`);
-    return;
+type AgentKey = Readonly<{
+  /** Agent name, e.g. the repository name. */
+  name: string;
+  /** GitHub SSH key title, unique per agent name. */
+  title: string;
+  /** Local private key path; the public key sits at `${path}.pub`. */
+  path: string;
+}>;
+
+/**
+ * Build the name-scoped key identity: local files at
+ * ~/.ssh/agent_key_<name>(.pub), GitHub title "agent_key_<name>".
+ *
+ * @param name - Validated agent name.
+ * @returns The key identity.
+ */
+const agentKeyFor = (name: string): AgentKey => ({
+  name,
+  title: `agent_key_${name}`,
+  path: join(homedir(), ".ssh", `agent_key_${name}`),
+});
+
+/**
+ * Resolve the agent name from AGENT_NAME (set by the makefile from its
+ * NAME variable), falling back to an interactive prompt when unset.
+ *
+ * @returns The validated agent name.
+ */
+const resolveAgentName = async (): Promise<string> => {
+  const fromEnv = process.env[AGENT_NAME_ENV]?.trim();
+  if (fromEnv !== undefined && fromEnv !== "") {
+    if (!AGENT_NAME_PATTERN.test(fromEnv)) {
+      throw new Error(
+        `${AGENT_NAME_ENV}="${fromEnv}" is invalid; expected ${AGENT_NAME_PATTERN}`,
+      );
+    }
+    log.info(`Using agent name "${fromEnv}" from ${AGENT_NAME_ENV}`);
+    return fromEnv;
   }
-  await run("git", [
-    "-C",
-    barePath,
-    "worktree",
-    "add",
-    worktreePath,
-    defaultBranch,
-  ]);
-  log.success(`Added worktree for ${defaultBranch} at ${worktreePath}`);
+  const name = await text({
+    message: "Name for this agent (usually the repository name)",
+    placeholder: "myrepo",
+    validate: (nameInput: string | undefined): string | undefined => {
+      if (nameInput === undefined || !AGENT_NAME_PATTERN.test(nameInput)) {
+        return "Expected a name like \"myrepo\" (letters, digits, dots, dashes, underscores)";
+      }
+      return undefined;
+    },
+  });
+  if (isCancel(name)) {
+    cancel("Setup cancelled.");
+    process.exit(0);
+  }
+  return name;
 };
 
 /**
- * Generate a new ed25519 key pair at KEY_PATH, asking before overwriting
- * an existing key.
- *
- * @returns True when a fresh key pair was generated.
+ * A public SSH key registered on the GitHub account.
  */
-const generateKeyPair = async (): Promise<boolean> => {
+type RemoteSshKey = Readonly<{
+  id: number;
+  key: string;
+}>;
+
+/**
+ * Look up the account's SSH key with the given title via gh.
+ *
+ * @param title - Key title to find.
+ * @returns The remote key (id + public key material), or undefined.
+ */
+const findRemoteKey = async (
+  title: string,
+): Promise<RemoteSshKey | undefined> => {
+  const raw = await run("gh", ["api", "user/keys", "--paginate"]);
+  const entries = JSON.parse(raw) as ReadonlyArray<{
+    id: number;
+    title: string;
+    key: string;
+  }>;
+  const match = entries.find((entry) => entry.title === title);
+  return match === undefined
+    ? undefined
+    : { id: match.id, key: match.key };
+};
+
+/**
+ * Delete an SSH key from the GitHub account by its id.
+ *
+ * @param id - Numeric id of the key to delete.
+ */
+const deleteRemoteKey = async (id: number): Promise<void> => {
+  await run("gh", ["api", "-X", "DELETE", `user/keys/${id}`]);
+};
+
+/**
+ * The comparable part of an OpenSSH public key: type + base64 material,
+ * without any comment.
+ *
+ * @param publicKey - Full public key line.
+ * @returns The key material.
+ */
+const keyMaterialOf = (publicKey: string): string =>
+  publicKey.trim().split(/\s+/).slice(0, 2).join(" ");
+
+/**
+ * Derive the public key of a local private key via ssh-keygen.
+ *
+ * @param keyPath - Path of the private key.
+ * @returns The public key line.
+ */
+const localPublicKeyOf = async (keyPath: string): Promise<string> =>
+  run("ssh-keygen", ["-y", "-f", keyPath]);
+
+/**
+ * Generate a new ed25519 key pair for the agent key, replacing any
+ * existing files. Callers decide when replacement is appropriate.
+ *
+ * @param key - Name-scoped agent key.
+ */
+const generateKeyPair = async (key: AgentKey): Promise<void> => {
   mkdirSync(join(homedir(), ".ssh"), { recursive: true, mode: 0o700 });
-
-  if (existsSync(KEY_PATH)) {
-    const overwrite = await confirm({
-      message: `${KEY_PATH} already exists. Overwrite it?`,
-      initialValue: false,
-    });
-    if (isCancel(overwrite)) {
-      cancel("Setup cancelled.");
-      process.exit(0);
-    }
-    if (!overwrite) {
-      log.info("Reusing the existing key pair.");
-      return false;
-    }
-    rmSync(KEY_PATH, { force: true });
-    rmSync(`${KEY_PATH}.pub`, { force: true });
-  }
-
+  rmSync(key.path, { force: true });
+  rmSync(`${key.path}.pub`, { force: true });
   await run("ssh-keygen", [
     "-t",
     "ed25519",
     "-f",
-    KEY_PATH,
+    key.path,
     "-N",
     "",
     "-C",
-    KEY_TITLE,
+    key.title,
   ]);
-  log.success(`Generated ed25519 key pair at ${KEY_PATH}`);
-  return true;
+  log.success(`Generated ed25519 key pair at ${key.path}`);
 };
 
 /**
- * Upload the public key to GitHub via gh, enriching permission errors
- * with token-fixing guidance.
+ * Upload the agent's public key to GitHub via gh, enriching permission
+ * errors with token-fixing guidance.
+ *
+ * @param key - Name-scoped agent key.
  */
-const uploadKey = async (): Promise<void> => {
+const uploadKey = async (key: AgentKey): Promise<void> => {
   try {
     await run("gh", [
       "ssh-key",
       "add",
-      `${KEY_PATH}.pub`,
+      `${key.path}.pub`,
       "--title",
-      KEY_TITLE,
+      key.title,
       "--type",
       "authentication",
     ]);
@@ -487,7 +554,47 @@ const uploadKey = async (): Promise<void> => {
     }
     throw error;
   }
-  log.success(`Uploaded public key to GitHub as "${KEY_TITLE}"`);
+  log.success(`Uploaded public key to GitHub as "${key.title}"`);
+};
+
+/**
+ * Ensure the GitHub account holds this agent name's public key, uploading
+ * or replacing as needed. An existing local key pair is reused and
+ * re-uploaded when GitHub has no (or a different) key under the title;
+ * otherwise a fresh pair is generated, replacing any stale remote key
+ * left over from a previous container. GitHub stores only public keys,
+ * so the remote side is always written, never read back.
+ *
+ * @param key - Name-scoped agent key.
+ */
+const ensureAgentKey = async (key: AgentKey): Promise<void> => {
+  const remote = await findRemoteKey(key.title);
+
+  if (existsSync(key.path)) {
+    if (
+      remote !== undefined &&
+      keyMaterialOf(await localPublicKeyOf(key.path)) ===
+        keyMaterialOf(remote.key)
+    ) {
+      log.success(
+        `Reusing key pair at ${key.path} (on GitHub as "${key.title}")`,
+      );
+      return;
+    }
+    if (remote !== undefined) {
+      await deleteRemoteKey(remote.id);
+      log.info(`Replaced outdated GitHub key "${key.title}"`);
+    }
+    await uploadKey(key);
+    return;
+  }
+
+  if (remote !== undefined) {
+    await deleteRemoteKey(remote.id);
+    log.info(`Replaced stale GitHub key "${key.title}"`);
+  }
+  await generateKeyPair(key);
+  await uploadKey(key);
 };
 
 const main = async (): Promise<void> => {
@@ -500,10 +607,10 @@ const main = async (): Promise<void> => {
   });
   intro("GitHub agent key setup");
   const token = await promptForToken();
+  const key = agentKeyFor(await resolveAgentName());
 
   const wantsClone = await confirm({
-    message:
-      "Clone a repository as a bare repo with a default-branch worktree?",
+    message: "Clone a repository into /app (default branch checked out)?",
     initialValue: true,
   });
   if (isCancel(wantsClone)) {
@@ -516,11 +623,8 @@ const main = async (): Promise<void> => {
   progress.start("Authenticating gh");
   const identity = await authenticateGh(token);
 
-  progress.message("Generating SSH key pair");
-  await generateKeyPair();
-
-  progress.message("Uploading public key to GitHub");
-  await uploadKey();
+  progress.message(`Ensuring SSH key pair "${key.title}"`);
+  await ensureAgentKey(key);
 
   progress.message("Configuring git identity");
   await configureGitIdentity(identity);
@@ -529,16 +633,14 @@ const main = async (): Promise<void> => {
   configureGitEnvVars(identity);
 
   progress.message("Configuring git SSH command");
-  await configureGitSshCommand();
+  await configureGitSshCommand(key);
 
   progress.message("Configuring ~/.ssh/config");
-  configureSshConfig();
+  configureSshConfig(key);
 
   if (slug !== undefined) {
     progress.message(`Cloning ${slug}`);
-    const barePath = await cloneBareRepo(slug);
-    progress.message("Adding worktree for the default branch");
-    await addDefaultBranchWorktree(slug, barePath);
+    await cloneRepo(slug);
   }
   progress.stop("All done");
 
