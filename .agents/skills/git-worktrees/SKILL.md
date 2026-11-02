@@ -5,37 +5,35 @@ description: Work with Git repositories using worktrees added to a regular clone
 
 # Git Worktrees in a Regular Clone
 
-A repository is cloned **normally**: the clone directory is the working
-directory for the default branch, and additional branches are added as
-worktrees **inside** that directory. The default branch checkout is the
-hub of the repository — all worktrees share its objects and refs.
+The repository is cloned **normally** into `/app`: the clone directory
+is the working directory for the default branch, and additional branches
+are added as worktrees **inside** that directory. The default branch
+checkout is the hub of the repository — all worktrees share its objects
+and refs.
 
 ## Per-repo layout
 
-Clone each repository directly into its own directory named after the
-repository; that directory *is* the default-branch checkout. Worktrees for
-additional branches live inside it, so everything for a repo stays
-self-contained:
+Clone the repository directly into `/app`; that directory *is* the
+default-branch checkout. Worktrees for additional branches live inside
+it, so everything for the repo stays self-contained:
 
 ```text
-/app/                                # Container working directory
-├── my-project/                      # Regular clone: default branch (main) checked out
-│   ├── .git/                        # Repository metadata (shared with all worktrees)
-│   ├── feature/                     # Worktree: additional branch
-│   └── ...                          # Working files of the default branch
-└── other-repo/                      # A second repository, fully isolated
-    └── ...
+/app/                                # The repository clone: default branch (main) checked out
+├── .git/                            # Repository metadata (shared with all worktrees)
+├── feature/                         # Worktree: additional branch
+└── ...                              # Working files of the default branch
 ```
 
-This is the layout the container setup script creates: for a repo
-`owner/my-project` everything lives under `/app/my-project/`.
+This is the layout the container setup script creates: the clone of the
+repo (e.g. `owner/my-project`) lives directly at `/app/`, and branch
+worktrees live inside it at `/app/<branch>`.
 
 ## Setup
 
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/user/my-project.git my-project
+git clone https://github.com/user/my-project.git /app
 ```
 
 The clone checks out the default branch automatically; no further step is
@@ -47,7 +45,7 @@ Worktrees are added from inside the clone, with the branch name as the
 directory name so they stay inside the repo directory:
 
 ```bash
-cd my-project
+cd /app
 ```
 
 Existing branch:
@@ -81,7 +79,7 @@ means changing directories, not running `git checkout`.
 Fetch and pull inside the relevant working directory:
 
 ```bash
-cd my-project
+cd /app
 git fetch origin
 git pull
 ```
@@ -105,16 +103,15 @@ for the whole repository; every other worktree sees them immediately.
   `.git/info/exclude` (local, not committed) if the noise bothers you.
 - Never run `git worktree remove` on a worktree with uncommitted changes
   you intend to keep; check `git status` in that directory first.
-- Keep worktrees inside their own repository's directory; never place
-  worktrees from different repos in a shared parent directory, or branch
-  names will collide.
+- Keep worktrees inside the clone at `/app`; since `/app` holds a single
+  repository, worktree directory names are branch names and stay unique.
 
 ## Minimal workflow
 
 ```bash
 # Clone once; the default branch is checked out immediately
-git clone https://github.com/user/my-project.git my-project
-cd my-project
+git clone https://github.com/user/my-project.git /app
+cd /app
 
 # Add a worktree for another branch, inside the checkout
 git worktree add -b feature feature main

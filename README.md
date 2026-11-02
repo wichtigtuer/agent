@@ -67,9 +67,9 @@ make pi NAME=myrepo     # 3. Launch pi in a tmux session inside the container
 - `make setup NAME=<repo>` — runs `setup-agent` (from
   `scripts/setup-github-agent.ts`): prompts for a GitHub PAT, ensures a
   per-name ed25519 SSH key (see below), configures git identity + SSH, and
-  optionally clones a repository into `/app/<repo>` as a regular checkout of
+  optionally clones a repository directly into `/app` as a regular checkout of
   the default branch (additional branch worktrees go inside the checkout at
-  `/app/<repo>/<branch>`).
+  `/app/<branch>`).
 - `make pi NAME=<repo>` — runs the Pi Coding Agent in a tmux session
   (`PI_AGENT_API_KEY` is forwarded from the host).
 - `make shell NAME=<repo>` — opens a bash shell in the container.

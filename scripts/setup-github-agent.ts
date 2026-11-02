@@ -26,9 +26,9 @@ import { join } from "node:path";
 
 const SSH_CONFIG_PATH = join(homedir(), ".ssh", "config");
 const BASHRC_PATH = join(homedir(), ".bashrc");
-// Repositories are cloned directly under /app/<repo> as regular checkouts
-// of the default branch; additional branch worktrees are added inside the
-// checkout at /app/<repo>/<branch>.
+// The repository is cloned directly into /app as a regular checkout of the
+// default branch; additional branch worktrees are added inside the
+// checkout at /app/<branch>.
 const REPOS_DIR = "/app";
 // The agent name (usually the repository name) scopes the SSH key both
 // locally (~/.ssh/agent_key_<name>) and on GitHub (title "agent_key_<name>"),
@@ -330,26 +330,6 @@ const configureSshConfig = (key: AgentKey): void => {
 };
 
 /**
- * Short repository name — the part after the slash in `owner/repo`.
- *
- * @param slug - Validated repository slug.
- * @returns The repository name.
- */
-const repoNameOf = (slug: RepoSlug): string => {
-  const segments = slug.split("/");
-  return segments[segments.length - 1] ?? slug;
-};
-
-/**
- * Per-repository folder that keeps every clone self-contained, so
- * different repos never share or collide inside /app.
- *
- * @param slug - Validated repository slug.
- * @returns Absolute path of the repo's folder (/app/<repo>).
- */
-const repoDirOf = (slug: RepoSlug): string => join(REPOS_DIR, repoNameOf(slug));
-
-/**
  * Check whether a repository holds at least one ref, i.e. its clone
  * completed. A clone killed mid-fetch leaves a directory with no refs.
  *
@@ -366,23 +346,29 @@ const repoHasRefs = async (repoDir: string): Promise<boolean> => {
 };
 
 /**
- * Clone the repository into /app/<repo> as a regular checkout of the
+ * Clone the repository directly into /app as a regular checkout of the
  * default branch, reusing the clone when it already exists. Additional
- * branch worktrees are added later inside the checkout at
- * /app/<repo>/<branch>.
+ * branch worktrees are added later inside the checkout at /app/<branch>.
+ * git accepts an existing empty directory as the clone target, so a fresh
+ * volume works; a non-empty /app that is not a repository is rejected with
+ * guidance instead of being overwritten.
  *
  * @param slug - Repository to clone.
  * @returns Path of the checkout.
  */
 const cloneRepo = async (slug: RepoSlug): Promise<string> => {
-  const repoDir = repoDirOf(slug);
+  const repoDir = REPOS_DIR;
   if (existsSync(join(repoDir, ".git"))) {
     if (await repoHasRefs(repoDir)) {
       log.info(`Reusing existing repository at ${repoDir}`);
       return repoDir;
     }
     log.warn(`Removing incomplete repository at ${repoDir}`);
-    rmSync(repoDir, { recursive: true, force: true });
+    // /app may be a volume mount point, so empty it instead of removing
+    // the directory itself (rmdir of a mount fails with EBUSY).
+    for (const entry of readdirSync(repoDir)) {
+      rmSync(join(repoDir, entry), { recursive: true, force: true });
+    }
   } else if (existsSync(repoDir) && readdirSync(repoDir).length > 0) {
     throw new Error(
       `${repoDir} exists but is not a git repository; move it aside or remove it`,
