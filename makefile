@@ -18,6 +18,7 @@ endif
 DOCKER_RUN_ARGS := \
 	-dit \
 	--rm \
+	-e AGENT_NAME=$(NAME) \
 	-v penfold-gh-config:/home/node/.config \
 	-v penfold-pi-config:/home/node/.pi \
 	-v penfold-worktrees-$(NAME):/app \

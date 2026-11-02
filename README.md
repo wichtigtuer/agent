@@ -65,8 +65,8 @@ make pi NAME=myrepo     # 3. Launch pi in a tmux session inside the container
   pi config, repositories (`/app`, dedicated to this NAME), and your
   `./secrets` SSH keys.
 - `make setup NAME=<repo>` — runs `setup-agent` (from
-  `scripts/setup-github-agent.ts`): prompts for a GitHub PAT, generates an
-  ed25519 SSH key, uploads it to GitHub, configures git identity + SSH, and
+  `scripts/setup-github-agent.ts`): prompts for a GitHub PAT, ensures a
+  per-name ed25519 SSH key (see below), configures git identity + SSH, and
   optionally clones a repository into `/app/<repo>` as a regular checkout of
   the default branch (additional branch worktrees go inside the checkout at
   `/app/<repo>/<branch>`).
@@ -75,3 +75,19 @@ make pi NAME=myrepo     # 3. Launch pi in a tmux session inside the container
 - `make shell NAME=<repo>` — opens a bash shell in the container.
 - `make stop NAME=<repo>` — stops the container (it is removed automatically
   via `--rm`).
+
+### Per-name SSH keys
+
+`make run NAME=<name>` passes the name into the container as `AGENT_NAME`.
+`setup-agent` scopes the SSH key by that name: the local key pair lives at
+`~/.ssh/agent_key_<name>` (inside the shared `./secrets` mount, so it
+survives container replacement) and is uploaded to GitHub with the title
+`agent_key_<name>`. Running five containers for five repos therefore yields
+five distinct keys in the GitHub account.
+
+On startup `setup-agent` uploads/replaces as needed:
+
+- Local key present → it is reused; the public key is uploaded to GitHub
+  if the account has no (or a different) key under `agent_key_<name>`.
+- Local key missing → a fresh pair is generated and uploaded, replacing
+  any stale `agent_key_<name>` left on the account by a previous container.
