@@ -21,7 +21,7 @@ DOCKER_RUN_ARGS := \
 	-e AGENT_NAME=$(NAME) \
 	-v penfold-gh-config:/home/node/.config \
 	-v penfold-pi-config:/home/node/.pi \
-	-v penfold-worktrees-$(NAME):/app \
+	-v penfold-app-$(NAME):/app \
 	-v "$$(pwd)/secrets:/home/node/.ssh" \
 	--name $(CONTAINER_AGENT)
 

@@ -43,14 +43,14 @@ make run NAME=myrepo
 The build uses `--no-cache --pull`, so every rebuild picks up the latest
 `node:24-slim` base image, apt packages, pnpm, Playwright browsers, and the
 newest `@earendil-works/pi-coding-agent`. Named volumes
-(`penfold-gh-config`, `penfold-pi-config`, `penfold-worktrees-<name>`)
+(`penfold-gh-config`, `penfold-pi-config`, `penfold-app-<name>`)
 persist your gh/pi config and `/app` repositories across rebuilds.
 
 ## Use
 
 Every container action takes a `NAME` (e.g. the repository name). It names
 the container (`penfold-agent-<name>`) and its dedicated `/app` volume
-(`penfold-worktrees-<name>`), so containers started with different names run
+(`penfold-app-<name>`), so containers started with different names run
 in parallel: each gets an isolated `/app`, while gh config, pi config and
 the `./secrets` SSH keys stay shared across all of them. Typical workflow
 (see `make help` for all targets):
@@ -68,8 +68,7 @@ make pi NAME=myrepo     # 3. Launch pi in a tmux session inside the container
   `scripts/setup-github-agent.ts`): prompts for a GitHub PAT, ensures a
   per-name ed25519 SSH key (see below), configures git identity + SSH, and
   optionally clones a repository directly into `/app` as a regular checkout of
-  the default branch (additional branch worktrees go inside the checkout at
-  `/app/<branch>`).
+  the default branch.
 - `make pi NAME=<repo>` — runs the Pi Coding Agent in a tmux session
   (`PI_AGENT_API_KEY` is forwarded from the host).
 - `make shell NAME=<repo>` — opens a bash shell in the container.

@@ -27,8 +27,7 @@ import { join } from "node:path";
 const SSH_CONFIG_PATH = join(homedir(), ".ssh", "config");
 const BASHRC_PATH = join(homedir(), ".bashrc");
 // The repository is cloned directly into /app as a regular checkout of the
-// default branch; additional branch worktrees are added inside the
-// checkout at /app/<branch>.
+// default branch.
 const REPOS_DIR = "/app";
 // The agent name (usually the repository name) scopes the SSH key both
 // locally (~/.ssh/agent_key_<name>) and on GitHub (title "agent_key_<name>"),
@@ -347,8 +346,7 @@ const repoHasRefs = async (repoDir: string): Promise<boolean> => {
 
 /**
  * Clone the repository directly into /app as a regular checkout of the
- * default branch, reusing the clone when it already exists. Additional
- * branch worktrees are added later inside the checkout at /app/<branch>.
+ * default branch, reusing the clone when it already exists.
  * git accepts an existing empty directory as the clone target, so a fresh
  * volume works; a non-empty /app that is not a repository is rejected with
  * guidance instead of being overwritten.
@@ -428,7 +426,7 @@ const resolveAgentName = async (): Promise<string> => {
     placeholder: "myrepo",
     validate: (nameInput: string | undefined): string | undefined => {
       if (nameInput === undefined || !AGENT_NAME_PATTERN.test(nameInput)) {
-        return "Expected a name like \"myrepo\" (letters, digits, dots, dashes, underscores)";
+        return 'Expected a name like "myrepo" (letters, digits, dots, dashes, underscores)';
       }
       return undefined;
     },
@@ -464,9 +462,7 @@ const findRemoteKey = async (
     key: string;
   }>;
   const match = entries.find((entry) => entry.title === title);
-  return match === undefined
-    ? undefined
-    : { id: match.id, key: match.key };
+  return match === undefined ? undefined : { id: match.id, key: match.key };
 };
 
 /**
