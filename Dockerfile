@@ -1,6 +1,8 @@
 # Use an official Node.js runtime
 FROM node:24-slim
 
+LABEL org.opencontainers.image.source="https://github.com/wichtigtuer/agent"
+
 # Install global tools (if really needed)
 RUN apt-get update && apt-get install -y git curl jq wget vim fd-find ripgrep tmux && rm -rf /var/lib/apt/lists/*
 
