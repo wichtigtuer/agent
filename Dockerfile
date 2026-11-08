@@ -1,5 +1,5 @@
-# Use an official Node.js runtime
-FROM node:26-slim
+# Use the official Node.js LTS runtime
+FROM node:lts-slim
 
 LABEL org.opencontainers.image.source="https://github.com/wichtigtuer/agent"
 
@@ -15,15 +15,10 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
 	&& apt update \
 	&& apt install gh -y
 
-# Setup pnpm + global bin dir
+# Install pnpm directly via npm (no Corepack) and set up the global bin dir
 ENV PNPM_HOME="/pnpm"
-ENV PATH="/pnpm/bin:$PATH"
-ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-
-# Enable Corepack and prepare pnpm
-RUN corepack enable && corepack prepare pnpm@11.5.1 --activate
-ENV PNPM_HOME=/pnpm
-ENV PATH=/pnpm:$PATH
+ENV PATH="/pnpm:$PATH"
+RUN npm install -g pnpm@11.5.1
 
 # Set working directory
 WORKDIR /app
