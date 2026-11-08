@@ -1,5 +1,5 @@
 # Use an official Node.js runtime
-FROM node:24-slim
+FROM node:26-slim
 
 LABEL org.opencontainers.image.source="https://github.com/wichtigtuer/agent"
 
