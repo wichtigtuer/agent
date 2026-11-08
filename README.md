@@ -74,20 +74,18 @@ runs.
 The following targets use the repo's own `makefile` (development workflow).
 End users should install the distributed Makefile from a release instead.
 
-## Install
+## Building the image
 
-Build the image (tags it `wichtigtuer-agent:latest`):
+Build the image directly with Docker (tags it `wichtigtuer-agent:latest`):
 
 ```sh
-make build
-# or a specific revision:
-make build REVISION=v1.0.0
+docker build --no-cache --pull -t wichtigtuer-agent:latest -f Dockerfile .
 ```
 
-Equivalent without make:
+or a specific revision:
 
 ```sh
-docker build --no-cache --pull -t wichtigtuer-agent:latest -f Dockerfile.agent .
+docker build --no-cache --pull -t wichtigtuer-agent:v1.0.0 -f Dockerfile .
 ```
 
 ## Update
@@ -97,7 +95,7 @@ container:
 
 ```sh
 make stop NAME=myrepo
-make build
+docker build --no-cache --pull -t wichtigtuer-agent:latest -f Dockerfile .
 make run NAME=myrepo
 ```
 

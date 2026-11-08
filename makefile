@@ -8,7 +8,7 @@ CONTAINER_AGENT := wichtigtuer-agent-$(NAME)
 # the container and its dedicated /app volume, so containers started with
 # different names run in parallel: each gets an isolated /app, while gh
 # config, pi config and the SSH keys stay shared across all of them.
-NAME_REQUIRED_TARGETS := $(filter-out help build,$(MAKECMDGOALS))
+NAME_REQUIRED_TARGETS := $(filter-out help,$(MAKECMDGOALS))
 ifneq ($(NAME_REQUIRED_TARGETS),)
 ifeq ($(strip $(NAME)),)
 $(error NAME is required, e.g. `make run NAME=myrepo` — it names the container and its dedicated /app volume)
@@ -29,18 +29,11 @@ DOCKER_EXEC_ARGS := \
 	-it \
 	-e TERM=xterm-256color
 
-.PHONY: help build run setup pi shell stop
+.PHONY: help run setup pi shell stop
 
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | \
 	awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'
-
-build: ## Build agent Docker image (bakes in the setup-agent script)
-	docker build \
-		--no-cache \
-		--pull \
-		-t $(IMAGE_AGENT) \
-		-f Dockerfile .
 
 run: ## Start named agent container: make run NAME=<repo> (no host code mounted; provision inside via setup-agent)
 	docker run \
