@@ -4,7 +4,7 @@
 #   https://github.com/wichtigtuer/agent/releases
 #
 # This file is independent of the repository it is invoked from. Install it
-# once (see install.sh / agent-make in the same release) and use it from any
+# once (see install.sh / agent-wichtigtuer in the same release) and use it from any
 # project. Do not edit copies of this file in consuming repositories —
 # improvements are maintained centrally in wichtigtuer/agent.
 

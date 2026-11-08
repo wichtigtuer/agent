@@ -46,13 +46,13 @@ RUN /opt/npm-tools/install.sh
 
 # Bake the GitHub agent setup script into the image and expose it on PATH as
 # `setup-agent`, ready to run by anyone who enters the container
-RUN mkdir -p /opt/penfold
-WORKDIR /opt/penfold
+RUN mkdir -p /opt/wichtigtuer
+WORKDIR /opt/wichtigtuer
 RUN pnpm init && pnpm add @clack/prompts@$(node -p "require('/opt/npm-tools/package.json').dependencies['@clack/prompts']")
-COPY scripts/setup-github-agent.ts /opt/penfold/setup-github-agent.ts
-RUN printf '#!/bin/sh\nexec node --experimental-strip-types /opt/penfold/setup-github-agent.ts "$@"\n' > /usr/local/bin/setup-agent \
+COPY scripts/setup-github-agent.ts /opt/wichtigtuer/setup-github-agent.ts
+RUN printf '#!/bin/sh\nexec node --experimental-strip-types /opt/wichtigtuer/setup-github-agent.ts "$@"\n' > /usr/local/bin/setup-agent \
 	&& chmod +x /usr/local/bin/setup-agent \
-	&& chown -R node:node /opt/penfold
+	&& chown -R node:node /opt/wichtigtuer
 
 WORKDIR /app
 

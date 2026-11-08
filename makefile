@@ -1,8 +1,8 @@
 REVISION ?= latest
 NAME ?=
 
-IMAGE_AGENT := penfold-agent:$(REVISION)
-CONTAINER_AGENT := penfold-agent-$(NAME)
+IMAGE_AGENT := wichtigtuer-agent:$(REVISION)
+CONTAINER_AGENT := wichtigtuer-agent-$(NAME)
 
 # Every container action requires NAME (e.g. the repository name). It names
 # the container and its dedicated /app volume, so containers started with
@@ -19,9 +19,9 @@ DOCKER_RUN_ARGS := \
 	-dit \
 	--rm \
 	-e AGENT_NAME=$(NAME) \
-	-v penfold-gh-config:/home/node/.config \
-	-v penfold-pi-config:/home/node/.pi \
-	-v penfold-app-$(NAME):/app \
+	-v wichtigtuer-gh-config:/home/node/.config \
+	-v wichtigtuer-pi-config:/home/node/.pi \
+	-v wichtigtuer-app-$(NAME):/app \
 	-v "$$(pwd)/secrets:/home/node/.ssh" \
 	--name $(CONTAINER_AGENT)
 

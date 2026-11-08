@@ -11,7 +11,7 @@ distributed, versioned components:
 | Component | Distributed via | Role |
 | --- | --- | --- |
 | Docker image | GHCR (`ghcr.io/wichtigtuer/agent:<version>`) | Runtime environment and installed tools |
-| Makefile + `agent-make` wrapper | [GitHub Releases](https://github.com/wichtigtuer/agent/releases) | Host-side interface for managing agent containers |
+| Makefile + `agent-wichtigtuer` wrapper | [GitHub Releases](https://github.com/wichtigtuer/agent/releases) | Host-side interface for managing agent containers |
 
 ## Install the tool (from a release)
 
@@ -24,8 +24,8 @@ bash install.sh
 ```
 
 This installs the centrally maintained Makefile to
-`~/.config/agent/Makefile` and the `agent-make` wrapper to
-`~/.local/bin/agent-make` (make sure `~/.local/bin` is on your `PATH` —
+`~/.config/agent/Makefile` and the `agent-wichtigtuer` wrapper to
+`~/.local/bin/agent-wichtigtuer` (make sure `~/.local/bin` is on your `PATH` —
 the installer warns if it is not). The installer verifies both files
 against the release's `checksums.txt` before installing anything, and it
 is idempotent: re-running it from a newer release updates the
@@ -35,11 +35,11 @@ repository.
 Then, from any project:
 
 ```sh
-agent-make run NAME=myproject
-agent-make setup NAME=myproject
-agent-make pi NAME=myproject
-agent-make shell NAME=myproject
-agent-make stop NAME=myproject
+agent-wichtigtuer run NAME=myproject
+agent-wichtigtuer setup NAME=myproject
+agent-wichtigtuer pi NAME=myproject
+agent-wichtigtuer shell NAME=myproject
+agent-wichtigtuer stop NAME=myproject
 ```
 
 or equivalently `make -f ~/.config/agent/Makefile run NAME=myproject`.
@@ -48,17 +48,17 @@ Each release publishes these assets:
 
 ```text
 https://github.com/wichtigtuer/agent/releases/download/v1.0.0/Makefile
-https://github.com/wichtigtuer/agent/releases/download/v1.0.0/agent-make
+https://github.com/wichtigtuer/agent/releases/download/v1.0.0/agent-wichtigtuer
 https://github.com/wichtigtuer/agent/releases/download/v1.0.0/install.sh
 https://github.com/wichtigtuer/agent/releases/download/v1.0.0/checksums.txt
 ```
 
 The released Makefile defaults to the matching image tag
 (`ghcr.io/wichtigtuer/agent:v1.0.0`); overrides are passed on the
-command line, e.g. `agent-make run NAME=x VERSION=main` or a different
+command line, e.g. `agent-wichtigtuer run NAME=x VERSION=main` or a different
 registry entirely via `IMAGE=...`. `run` pulls the image before
 starting so updates need no thought; skip the pull with
-`agent-make run NAME=x SKIP_PULL=1` for offline use or faster repeat
+`agent-wichtigtuer run NAME=x SKIP_PULL=1` for offline use or faster repeat
 runs.
 
 ## Prerequisites
@@ -76,7 +76,7 @@ End users should install the distributed Makefile from a release instead.
 
 ## Install
 
-Build the image (tags it `penfold-agent:latest`):
+Build the image (tags it `wichtigtuer-agent:latest`):
 
 ```sh
 make build
@@ -87,7 +87,7 @@ make build REVISION=v1.0.0
 Equivalent without make:
 
 ```sh
-docker build --no-cache --pull -t penfold-agent:latest -f Dockerfile.agent .
+docker build --no-cache --pull -t wichtigtuer-agent:latest -f Dockerfile.agent .
 ```
 
 ## Update
@@ -104,14 +104,14 @@ make run NAME=myrepo
 The build uses `--no-cache --pull`, so every rebuild picks up the latest
 `node:24-slim` base image, apt packages, pnpm, Playwright browsers, and the
 newest `@earendil-works/pi-coding-agent`. Named volumes
-(`penfold-gh-config`, `penfold-pi-config`, `penfold-app-<name>`)
+(`wichtigtuer-gh-config`, `wichtigtuer-pi-config`, `wichtigtuer-app-<name>`)
 persist your gh/pi config and `/app` repositories across rebuilds.
 
 ## Use
 
 Every container action takes a `NAME` (e.g. the repository name). It names
-the container (`penfold-agent-<name>`) and its dedicated `/app` volume
-(`penfold-app-<name>`), so containers started with different names run
+the container (`wichtigtuer-agent-<name>`) and its dedicated `/app` volume
+(`wichtigtuer-app-<name>`), so containers started with different names run
 in parallel: each gets an isolated `/app`, while gh config, pi config and
 the `./secrets` SSH keys stay shared across all of them. Typical workflow
 (see `make help` for all targets):
@@ -167,7 +167,7 @@ Two workflows run for the tag:
    tagged `v1.0.0` (and `latest`).
 2. `release.yml` substitutes the version into the files in `dist/`,
    generates `checksums.txt`, and creates a GitHub Release with the
-   `Makefile`, `agent-make`, `install.sh`, and `checksums.txt` assets,
+   `Makefile`, `agent-wichtigtuer`, `install.sh`, and `checksums.txt` assets,
    then verifies the uploaded assets against the checksums.
 
 This keeps the Makefile version and the Docker image version in lockstep.
@@ -177,7 +177,7 @@ This keeps the Makefile version and the Docker image version in lockstep.
 ```text
 agent-v1.0.0/
 ├── Makefile
-├── agent-make
+├── agent-wichtigtuer
 ├── install.sh
 └── checksums.txt
 ```

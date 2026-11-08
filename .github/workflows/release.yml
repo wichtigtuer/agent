@@ -1,6 +1,6 @@
 name: Release
 
-# Publishes the distributed tool (Makefile, agent-make, install.sh) as
+# Publishes the distributed tool (Makefile, agent-wichtigtuer, install.sh) as
 # versioned GitHub Release assets whenever a v* tag is pushed. The matching
 # Docker image tag (ghcr.io/wichtigtuer/agent:<tag>) is built by the
 # docker-publish workflow from the same tag, keeping tool and image versions
@@ -8,7 +8,7 @@ name: Release
 #
 # Release layout:
 #   https://github.com/wichtigtuer/agent/releases/download/v1.0.0/Makefile
-#   https://github.com/wichtigtuer/agent/releases/download/v1.0.0/agent-make
+#   https://github.com/wichtigtuer/agent/releases/download/v1.0.0/agent-wichtigtuer
 #   https://github.com/wichtigtuer/agent/releases/download/v1.0.0/install.sh
 #   https://github.com/wichtigtuer/agent/releases/download/v1.0.0/checksums.txt
 
@@ -21,7 +21,7 @@ permissions:
   contents: write
 
 env:
-  ASSETS: Makefile agent-make install.sh checksums.txt
+  ASSETS: Makefile agent-wichtigtuer install.sh checksums.txt
 
 jobs:
   release:
@@ -38,13 +38,13 @@ jobs:
           VERSION="${GITHUB_REF_NAME}"
           BUILD_DIR="agent-${VERSION}"
           mkdir -p "$BUILD_DIR"
-          cp dist/Makefile dist/agent-make dist/install.sh "$BUILD_DIR/"
+          cp dist/Makefile dist/agent-wichtigtuer dist/install.sh "$BUILD_DIR/"
           sed -i "s/@VERSION@/${VERSION}/g" "$BUILD_DIR"/*
           if grep -r '@VERSION@' "$BUILD_DIR"; then
             echo "error: unsubstituted @VERSION@ placeholder remains"
             exit 1
           fi
-          (cd "$BUILD_DIR" && sha256sum Makefile agent-make install.sh > checksums.txt)
+          (cd "$BUILD_DIR" && sha256sum Makefile agent-wichtigtuer install.sh > checksums.txt)
 
       # 3. Create the GitHub Release and attach the assets
       - name: Create GitHub Release
@@ -56,7 +56,7 @@ jobs:
             --generate-notes \
             --title "$VERSION" \
             "agent-${VERSION}/Makefile" \
-            "agent-${VERSION}/agent-make" \
+            "agent-${VERSION}/agent-wichtigtuer" \
             "agent-${VERSION}/install.sh" \
             "agent-${VERSION}/checksums.txt"
 

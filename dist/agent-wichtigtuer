@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# agent-make — global entrypoint for the agent container management Makefile.
+# agent-wichtigtuer — global entrypoint for the agent container management Makefile.
 #
 # Installed by install.sh into ~/.local/bin. Invokes the centrally
 # maintained Makefile in ~/.config/agent from whatever directory you call
 # it in, so no project needs its own copy:
 #
-#   agent-make run NAME=myproject
-#   agent-make setup NAME=myproject
-#   agent-make pi NAME=myproject
+#   agent-wichtigtuer run NAME=myproject
+#   agent-wichtigtuer setup NAME=myproject
+#   agent-wichtigtuer pi NAME=myproject
 set -euo pipefail
 
 MAKEFILE="${AGENT_MAKEFILE:-$HOME/.config/agent/Makefile}"
