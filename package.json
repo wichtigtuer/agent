@@ -1,5 +1,5 @@
 {
-  "name": "penfold-agent",
+  "name": "wichtigtuer-agent",
   "private": true,
   "description": "Version manifest for globally installed npm tools in the agent Docker image. Updated by Dependabot.",
   "dependencies": {

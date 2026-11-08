@@ -5,6 +5,62 @@ Playwright, and the [Pi Coding Agent](https://github.com/earendil-works/pi)
 preinstalled, plus a baked-in `setup-agent` script that provisions GitHub
 authentication (PAT → SSH key → repository clone) inside the container.
 
+The repository is the single source of truth for two independently
+distributed, versioned components:
+
+| Component | Distributed via | Role |
+| --- | --- | --- |
+| Docker image | GHCR (`ghcr.io/wichtigtuer/agent:<version>`) | Runtime environment and installed tools |
+| Makefile + `agent-wichtigtuer` wrapper | [GitHub Releases](https://github.com/wichtigtuer/agent/releases) | Host-side interface for managing agent containers |
+
+## Install the tool (from a release)
+
+Download the installer from a release, inspect it, and run it:
+
+```sh
+curl -fsSL https://github.com/wichtigtuer/agent/releases/download/v1.0.0/install.sh -o install.sh
+less install.sh   # inspect before executing
+bash install.sh
+```
+
+This installs the centrally maintained Makefile to
+`~/.config/agent/Makefile` and the `agent-wichtigtuer` wrapper to
+`~/.local/bin/agent-wichtigtuer` (make sure `~/.local/bin` is on your `PATH` —
+the installer warns if it is not). The installer verifies both files
+against the release's `checksums.txt` before installing anything, and it
+is idempotent: re-running it from a newer release updates the
+installation. No Makefile needs to be committed to any consuming
+repository.
+
+Then, from any project:
+
+```sh
+agent-wichtigtuer run NAME=myproject
+agent-wichtigtuer setup NAME=myproject
+agent-wichtigtuer pi NAME=myproject
+agent-wichtigtuer shell NAME=myproject
+agent-wichtigtuer stop NAME=myproject
+```
+
+or equivalently `make -f ~/.config/agent/Makefile run NAME=myproject`.
+
+Each release publishes these assets:
+
+```text
+https://github.com/wichtigtuer/agent/releases/download/v1.0.0/Makefile
+https://github.com/wichtigtuer/agent/releases/download/v1.0.0/agent-wichtigtuer
+https://github.com/wichtigtuer/agent/releases/download/v1.0.0/install.sh
+https://github.com/wichtigtuer/agent/releases/download/v1.0.0/checksums.txt
+```
+
+The released Makefile defaults to the matching image tag
+(`ghcr.io/wichtigtuer/agent:v1.0.0`); overrides are passed on the
+command line, e.g. `agent-wichtigtuer run NAME=x VERSION=main` or a different
+registry entirely via `IMAGE=...`. `run` pulls the image before
+starting so updates need no thought; skip the pull with
+`agent-wichtigtuer run NAME=x SKIP_PULL=1` for offline use or faster repeat
+runs.
+
 ## Prerequisites
 
 - Docker
@@ -13,20 +69,23 @@ authentication (PAT → SSH key → repository clone) inside the container.
 - `PI_AGENT_API_KEY` in your host environment (for the `pi` / `shell` targets)
 - SSH keys mounted from `./secrets` into the container (see `make run`)
 
-## Install
+## Developing this repository
 
-Build the image (tags it `penfold-agent:latest`):
+The following targets use the repo's own `makefile` (development workflow).
+End users should install the distributed Makefile from a release instead.
+
+## Building the image
+
+Build the image directly with Docker (tags it `wichtigtuer-agent:latest`):
 
 ```sh
-make build
-# or a specific revision:
-make build REVISION=v1.0.0
+docker build --no-cache --pull -t wichtigtuer-agent:latest -f Dockerfile .
 ```
 
-Equivalent without make:
+or a specific revision:
 
 ```sh
-docker build --no-cache --pull -t penfold-agent:latest -f Dockerfile.agent .
+docker build --no-cache --pull -t wichtigtuer-agent:v1.0.0 -f Dockerfile .
 ```
 
 ## Update
@@ -36,21 +95,21 @@ container:
 
 ```sh
 make stop NAME=myrepo
-make build
+docker build --no-cache --pull -t wichtigtuer-agent:latest -f Dockerfile .
 make run NAME=myrepo
 ```
 
 The build uses `--no-cache --pull`, so every rebuild picks up the latest
 `node:24-slim` base image, apt packages, pnpm, Playwright browsers, and the
 newest `@earendil-works/pi-coding-agent`. Named volumes
-(`penfold-gh-config`, `penfold-pi-config`, `penfold-app-<name>`)
+(`wichtigtuer-gh-config`, `wichtigtuer-pi-config`, `wichtigtuer-app-<name>`)
 persist your gh/pi config and `/app` repositories across rebuilds.
 
 ## Use
 
 Every container action takes a `NAME` (e.g. the repository name). It names
-the container (`penfold-agent-<name>`) and its dedicated `/app` volume
-(`penfold-app-<name>`), so containers started with different names run
+the container (`wichtigtuer-agent-<name>`) and its dedicated `/app` volume
+(`wichtigtuer-app-<name>`), so containers started with different names run
 in parallel: each gets an isolated `/app`, while gh config, pi config and
 the `./secrets` SSH keys stay shared across all of them. Typical workflow
 (see `make help` for all targets):
@@ -90,3 +149,36 @@ On startup `setup-agent` uploads/replaces as needed:
   if the account has no (or a different) key under `agent_key_<name>`.
 - Local key missing → a fresh pair is generated and uploaded, replacing
   any stale `agent_key_<name>` left on the account by a previous container.
+
+## Releasing
+
+Releases are cut by pushing a semantic version tag:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+Two workflows run for the tag:
+
+1. `docker-publish.yml` builds and pushes the multi-arch image to GHCR,
+   tagged `v1.0.0` (and `latest`).
+2. `release.yml` substitutes the version into the files in `dist/`,
+   generates `checksums.txt`, and creates a GitHub Release with the
+   `Makefile`, `agent-wichtigtuer`, `install.sh`, and `checksums.txt` assets,
+   then verifies the uploaded assets against the checksums.
+
+This keeps the Makefile version and the Docker image version in lockstep.
+
+### Release asset layout
+
+```text
+agent-v1.0.0/
+├── Makefile
+├── agent-wichtigtuer
+├── install.sh
+└── checksums.txt
+```
+
+The sources for the release assets live in `dist/` in this repository.
+Edit them there — never a copy installed on a workstation.
