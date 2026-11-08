@@ -44,12 +44,21 @@ echo "Verifying checksums"
 install -m 644 "$tmp/Makefile" "$CONFIG_DIR/Makefile"
 install -m 755 "$tmp/agent-make" "$BIN_DIR/agent-make"
 
+# Warn if the wrapper is not on the PATH (common for ~/.local/bin).
+if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
+	echo
+	echo "note: $BIN_DIR is not on your PATH — add it, e.g.:" >&2
+	echo "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.profile" >&2
+fi
+
 echo
-echo "Installed:"
+echo "Installed agent $VERSION:"
 echo "  $CONFIG_DIR/Makefile"
 echo "  $BIN_DIR/agent-make"
 echo
-echo "Make sure $BIN_DIR is on your PATH, then from any project:"
+echo "From any project:"
 echo "  agent-make run NAME=myproject"
 echo "  agent-make setup NAME=myproject"
 echo "  agent-make pi NAME=myproject"
+echo
+echo "To update later, re-run this script from a newer release."

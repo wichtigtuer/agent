@@ -25,9 +25,12 @@ bash install.sh
 
 This installs the centrally maintained Makefile to
 `~/.config/agent/Makefile` and the `agent-make` wrapper to
-`~/.local/bin/agent-make` (make sure `~/.local/bin` is on your `PATH`).
-The installer verifies both files against the release's `checksums.txt`.
-No Makefile needs to be committed to any consuming repository.
+`~/.local/bin/agent-make` (make sure `~/.local/bin` is on your `PATH` —
+the installer warns if it is not). The installer verifies both files
+against the release's `checksums.txt` before installing anything, and it
+is idempotent: re-running it from a newer release updates the
+installation. No Makefile needs to be committed to any consuming
+repository.
 
 Then, from any project:
 
@@ -51,8 +54,12 @@ https://github.com/wichtigtuer/agent/releases/download/v1.0.0/checksums.txt
 ```
 
 The released Makefile defaults to the matching image tag
-(`ghcr.io/wichtigtuer/agent:v1.0.0`); override with e.g.
-`agent-make run NAME=x VERSION=main`.
+(`ghcr.io/wichtigtuer/agent:v1.0.0`); overrides are passed on the
+command line, e.g. `agent-make run NAME=x VERSION=main` or a different
+registry entirely via `IMAGE=...`. `run` pulls the image before
+starting so updates need no thought; skip the pull with
+`agent-make run NAME=x SKIP_PULL=1` for offline use or faster repeat
+runs.
 
 ## Prerequisites
 

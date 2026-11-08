@@ -38,6 +38,11 @@ DOCKER_EXEC_ARGS := \
 # the container and its dedicated /app volume, so containers started with
 # different names run in parallel: each gets an isolated /app, while gh
 # config, pi config and the SSH keys stay shared across all of them.
+
+# Skip the image pull on run (offline use, faster repeat runs):
+#   make run NAME=myrepo SKIP_PULL=1
+SKIP_PULL ?=
+
 NAME_REQUIRED_TARGETS := $(filter-out help pull,$(MAKECMDGOALS))
 ifneq ($(NAME_REQUIRED_TARGETS),)
 ifeq ($(strip $(NAME)),)
@@ -54,7 +59,10 @@ help: ## Show available commands
 pull: ## Pull the agent image
 	docker pull $(IMAGE)
 
-run: pull ## Start named agent container: make run NAME=<repo> (auto-pulls the image)
+run: ## Start named agent container: make run NAME=<repo> (auto-pulls the image; SKIP_PULL=1 skips the pull)
+ifeq ($(strip $(SKIP_PULL)),)
+	docker pull $(IMAGE)
+endif
 	docker run \
 		$(DOCKER_RUN_ARGS) \
 		$(IMAGE) \
