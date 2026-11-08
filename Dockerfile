@@ -40,14 +40,15 @@ RUN chown -R node:node /app
 RUN mkdir -p /home/node/.config /home/node/.pi && \
     chown -R node:node /home/node
 
-# Install Pi Coding Agent
-RUN pnpm add -g --ignore-scripts @earendil-works/pi-coding-agent
+# Install global npm tools (versions pinned in package.json, see install.sh)
+COPY package.json install.sh /opt/npm-tools/
+RUN /opt/npm-tools/install.sh
 
 # Bake the GitHub agent setup script into the image and expose it on PATH as
 # `setup-agent`, ready to run by anyone who enters the container
 RUN mkdir -p /opt/penfold
 WORKDIR /opt/penfold
-RUN pnpm init && pnpm add @clack/prompts@1.8.1
+RUN pnpm init && pnpm add @clack/prompts@$(node -p "require('/opt/npm-tools/package.json').dependencies['@clack/prompts']")
 COPY scripts/setup-github-agent.ts /opt/penfold/setup-github-agent.ts
 RUN printf '#!/bin/sh\nexec node --experimental-strip-types /opt/penfold/setup-github-agent.ts "$@"\n' > /usr/local/bin/setup-agent \
 	&& chmod +x /usr/local/bin/setup-agent \

@@ -1,0 +1,9 @@
+{
+  "name": "penfold-agent",
+  "private": true,
+  "description": "Version manifest for globally installed npm tools in the agent Docker image. Updated by Dependabot.",
+  "dependencies": {
+    "@clack/prompts": "1.8.1",
+    "@earendil-works/pi-coding-agent": "1.5.0"
+  }
+}

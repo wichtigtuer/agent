@@ -1,0 +1,14 @@
+version: 2
+
+updates:
+  # Docker base image updates
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Global npm packages (see package.json / install.sh)
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
