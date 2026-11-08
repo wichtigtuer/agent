@@ -29,11 +29,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      # 2. Set up Docker Buildx
+      # 2. Set up QEMU for cross-platform (linux/arm64) builds
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # 3. Set up Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # 3. Authenticate with GitHub Container Registry
+      # 4. Authenticate with GitHub Container Registry
       - name: Log in to GHCR
         uses: docker/login-action@v4
         with:
@@ -41,7 +45,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 4. Generate Docker image tags
+      # 5. Generate Docker image tags
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -54,12 +58,13 @@ jobs:
           flavor: |
             latest=auto
 
-      # 5. Build and publish the image
+      # 6. Build and publish the image
       - name: Build and push Docker image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
