@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# agent-make — global entrypoint for the agent container management Makefile.
+#
+# Installed by install.sh into ~/.local/bin. Invokes the centrally
+# maintained Makefile in ~/.config/agent from whatever directory you call
+# it in, so no project needs its own copy:
+#
+#   agent-make run NAME=myproject
+#   agent-make setup NAME=myproject
+#   agent-make pi NAME=myproject
+set -euo pipefail
+
+MAKEFILE="${AGENT_MAKEFILE:-$HOME/.config/agent/Makefile}"
+
+if [[ ! -f "$MAKEFILE" ]]; then
+	echo "error: $MAKEFILE not found — run the release install.sh first:" >&2
+	echo "  https://github.com/wichtigtuer/agent/releases" >&2
+	exit 1
+fi
+
+exec make -f "$MAKEFILE" "$@"

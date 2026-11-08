@@ -1,0 +1,72 @@
+name: Release
+
+# Publishes the distributed tool (Makefile, agent-make, install.sh) as
+# versioned GitHub Release assets whenever a v* tag is pushed. The matching
+# Docker image tag (ghcr.io/wichtigtuer/agent:<tag>) is built by the
+# docker-publish workflow from the same tag, keeping tool and image versions
+# in lockstep.
+#
+# Release layout:
+#   https://github.com/wichtigtuer/agent/releases/download/v1.0.0/Makefile
+#   https://github.com/wichtigtuer/agent/releases/download/v1.0.0/agent-make
+#   https://github.com/wichtigtuer/agent/releases/download/v1.0.0/install.sh
+#   https://github.com/wichtigtuer/agent/releases/download/v1.0.0/checksums.txt
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  ASSETS: Makefile agent-make install.sh checksums.txt
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Check out the repository at the tag
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      # 2. Substitute the version placeholder and generate checksums
+      - name: Build release assets
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          BUILD_DIR="agent-${VERSION}"
+          mkdir -p "$BUILD_DIR"
+          cp dist/Makefile dist/agent-make dist/install.sh "$BUILD_DIR/"
+          sed -i "s/@VERSION@/${VERSION}/g" "$BUILD_DIR"/*
+          if grep -r '@VERSION@' "$BUILD_DIR"; then
+            echo "error: unsubstituted @VERSION@ placeholder remains"
+            exit 1
+          fi
+          (cd "$BUILD_DIR" && sha256sum Makefile agent-make install.sh > checksums.txt)
+
+      # 3. Create the GitHub Release and attach the assets
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          gh release create "$VERSION" \
+            --generate-notes \
+            --title "$VERSION" \
+            "agent-${VERSION}/Makefile" \
+            "agent-${VERSION}/agent-make" \
+            "agent-${VERSION}/install.sh" \
+            "agent-${VERSION}/checksums.txt"
+
+      # 4. Verify the published assets against the checksums
+      - name: Verify release assets
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          BASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}"
+          mkdir -p verify && cd verify
+          for asset in $ASSETS; do
+            curl -fsSL "$BASE_URL/$asset" -o "$asset"
+          done
+          sha256sum -c checksums.txt
