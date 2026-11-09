@@ -71,8 +71,12 @@ runs.
 
 ## Developing this repository
 
-The following targets use the repo's own `makefile` (development workflow).
-End users should install the distributed Makefile from a release instead.
+The repo's own `makefile` is a thin development wrapper: it includes
+`dist/Makefile` (the single source of truth for all targets) and overrides
+the image to the locally built `wichtigtuer-agent:latest` with the registry
+pull skipped. Target changes belong in `dist/Makefile` — never in the
+wrapper. End users should install the distributed Makefile from a release
+instead.
 
 ## Building the image
 
