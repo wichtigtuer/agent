@@ -20,6 +20,9 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
 # pnpm's global bin dir
 ENV PNPM_HOME="/pnpm"
 ENV PATH="/pnpm:$PATH"
+# Create pnpm's home up front and hand it to the runtime user so pnpm can
+# create its package-manager env directory (/pnpm/global/...) at runtime
+RUN mkdir -p /pnpm && chown -R node:node /pnpm
 COPY package.json scripts/install-npm-tools.ts /opt/npm-tools/
 RUN node --experimental-strip-types /opt/npm-tools/install-npm-tools.ts
 
@@ -31,6 +34,9 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN mkdir -p /ms-playwright
 RUN pnpm dlx playwright install --with-deps
 RUN chown -R node:node /ms-playwright
+# The root-run pnpm above populates /pnpm as root; return ownership to the
+# runtime user
+RUN chown -R node:node /pnpm
 
 RUN chown -R node:node /app
 
