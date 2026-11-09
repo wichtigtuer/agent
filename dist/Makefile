@@ -13,20 +13,29 @@
 # override on the command line to use a different image tag (e.g. main).
 VERSION ?= @VERSION@
 IMAGE   ?= ghcr.io/wichtigtuer/agent:$(VERSION)
-NAME    ?=
+# FOLDER is the invoking directory's folder name (e.g. the repo name). All
+# containers started from the same folder share it — and therefore share the
+# gh-config / pi-config volumes.
+FOLDER  := $(notdir $(CURDIR))
 
-CONTAINER_AGENT := agent-$(NAME)
+# NAME distinguishes containers started from the same folder (each gets its
+# own /app volume). Defaults to `main`; override with `make run NAME=feature-x`
+# to run additional isolated containers for the same folder.
+NAME    ?= main
 
-# Volumes: gh/pi config are shared across all agents, /app and the container
-# itself are isolated per NAME. SSH keys are mounted from the invoking
-# directory's ./secrets (create it and place your keys there).
+CONTAINER_AGENT := agent-$(FOLDER)-$(NAME)
+
+# Volumes: gh/pi config are shared per FOLDER (every container started from
+# the same directory uses the same ones), /app is isolated per FOLDER+NAME,
+# and the container name is unique per FOLDER+NAME. SSH keys are mounted from
+# the invoking directory's ./secrets (create it and place your keys there).
 DOCKER_RUN_ARGS := \
 	-dit \
 	--rm \
-	-e AGENT_NAME=$(NAME) \
-	-v agent-gh-config:/home/node/.config \
-	-v agent-pi-config:/home/node/.pi \
-	-v agent-app-$(NAME):/app \
+	-e AGENT_NAME=$(FOLDER)-$(NAME) \
+	-v agent-gh-config-$(FOLDER):/home/node/.config \
+	-v agent-pi-config-$(FOLDER):/home/node/.pi \
+	-v agent-app-$(FOLDER)-$(NAME):/app \
 	-v "$(CURDIR)/secrets:/home/node/.ssh" \
 	--name $(CONTAINER_AGENT)
 
@@ -34,21 +43,15 @@ DOCKER_EXEC_ARGS := \
 	-it \
 	-e TERM=xterm-256color
 
-# Every container action requires NAME (e.g. the repository name). It names
-# the container and its dedicated /app volume, so containers started with
-# different names run in parallel: each gets an isolated /app, while gh
-# config, pi config and the SSH keys stay shared across all of them.
+# FOLDER (current directory name) scopes the shared config volumes; NAME
+# (default: main) names the container and its dedicated /app volume, so
+# containers started with different names from the same folder run in
+# parallel: each gets an isolated /app, while gh config, pi config and the
+# SSH keys stay shared across all of them.
 
 # Skip the image pull on run (offline use, faster repeat runs):
-#   make run NAME=myrepo SKIP_PULL=1
+#   make run SKIP_PULL=1
 SKIP_PULL ?=
-
-NAME_REQUIRED_TARGETS := $(filter-out help pull,$(MAKECMDGOALS))
-ifneq ($(NAME_REQUIRED_TARGETS),)
-ifeq ($(strip $(NAME)),)
-$(error NAME is required, e.g. `make run NAME=myrepo` — it names the container and its dedicated /app volume)
-endif
-endif
 
 .PHONY: help pull run setup pi shell stop
 
@@ -59,7 +62,7 @@ help: ## Show available commands
 pull: ## Pull the agent image
 	docker pull $(IMAGE)
 
-run: ## Start named agent container: make run NAME=<repo> (auto-pulls the image; SKIP_PULL=1 skips the pull)
+run: ## Start agent container for this folder (NAME=<instance> to run extra containers; SKIP_PULL=1 skips the pull)
 ifeq ($(strip $(SKIP_PULL)),)
 	docker pull $(IMAGE)
 endif
