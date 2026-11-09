@@ -1,6 +1,6 @@
 # agent
 
-Dockerized coding-agent environment: a Node 24 image with git, gh, pnpm,
+Dockerized coding-agent environment: a Node.js LTS image with git, gh, pnpm,
 Playwright, and the [Pi Coding Agent](https://github.com/earendil-works/pi)
 preinstalled, plus a baked-in `setup-agent` script that provisions GitHub
 authentication (PAT → SSH key → repository clone) inside the container.
@@ -100,7 +100,7 @@ make run NAME=myrepo
 ```
 
 The build uses `--no-cache --pull`, so every rebuild picks up the latest
-`node:24-slim` base image, apt packages, pnpm, Playwright browsers, and the
+`node:lts-slim` base image, apt packages, pnpm, Playwright browsers, and the
 newest `@earendil-works/pi-coding-agent`. Named volumes
 (`wichtigtuer-gh-config`, `wichtigtuer-pi-config`, `wichtigtuer-app-<name>`)
 persist your gh/pi config and `/app` repositories across rebuilds.

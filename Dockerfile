@@ -1,5 +1,5 @@
-# Use an official Node.js runtime
-FROM node:24-slim
+# Use the official Node.js LTS runtime
+FROM node:lts-slim
 
 LABEL org.opencontainers.image.source="https://github.com/wichtigtuer/agent"
 
@@ -15,15 +15,12 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
 	&& apt update \
 	&& apt install gh -y
 
-# Setup pnpm + global bin dir
+# Install global npm tools — including pnpm — pinned in package.json
+# (managed by Dependabot, see install.sh), and set up pnpm's global bin dir
 ENV PNPM_HOME="/pnpm"
-ENV PATH="/pnpm/bin:$PATH"
-ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-
-# Enable Corepack and prepare pnpm
-RUN corepack enable && corepack prepare pnpm@11.5.1 --activate
-ENV PNPM_HOME=/pnpm
-ENV PATH=/pnpm:$PATH
+ENV PATH="/pnpm:$PATH"
+COPY package.json install.sh /opt/npm-tools/
+RUN /opt/npm-tools/install.sh
 
 # Set working directory
 WORKDIR /app
@@ -39,10 +36,6 @@ RUN chown -R node:node /app
 # Make the node user own its home directory
 RUN mkdir -p /home/node/.config /home/node/.pi && \
     chown -R node:node /home/node
-
-# Install global npm tools (versions pinned in package.json, see install.sh)
-COPY package.json install.sh /opt/npm-tools/
-RUN /opt/npm-tools/install.sh
 
 # Bake the GitHub agent setup script into the image and expose it on PATH as
 # `setup-agent`, ready to run by anyone who enters the container
