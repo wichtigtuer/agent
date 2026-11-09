@@ -16,11 +16,12 @@ RUN mkdir -p -m 755 /etc/apt/keyrings \
 	&& apt install gh -y
 
 # Install global npm tools — including pnpm — pinned in package.json
-# (managed by Dependabot, see install.sh), and set up pnpm's global bin dir
+# (managed by Dependabot, see scripts/install-npm-tools.ts), and set up
+# pnpm's global bin dir
 ENV PNPM_HOME="/pnpm"
 ENV PATH="/pnpm:$PATH"
-COPY package.json install.sh /opt/npm-tools/
-RUN /opt/npm-tools/install.sh
+COPY package.json scripts/install-npm-tools.ts /opt/npm-tools/
+RUN node --experimental-strip-types /opt/npm-tools/install-npm-tools.ts
 
 # Set working directory
 WORKDIR /app

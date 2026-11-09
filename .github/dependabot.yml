@@ -7,7 +7,7 @@ updates:
     schedule:
       interval: weekly
 
-  # Global npm packages (see package.json / install.sh)
+  # Global npm packages (see package.json / scripts/install-npm-tools.ts)
   - package-ecosystem: npm
     directory: /
     schedule:
