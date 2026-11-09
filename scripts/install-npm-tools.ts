@@ -20,7 +20,11 @@ const { dependencies } = JSON.parse(readFileSync(manifest, 'utf8')) as {
 for (const [name, version] of Object.entries(dependencies)) {
 	const pkg = `${name}@${version}`;
 	console.log(`Installing ${pkg}`);
-	execFileSync('npm', ['install', '-g', pkg, '--ignore-scripts'], {
+	// pnpm's postinstall installs its native binary (@pnpm/exe). Skipping it
+	// leaves pnpm running through Node.js, so allow its build scripts to run.
+	const args = ['install', '-g', pkg];
+	if (name !== 'pnpm') args.push('--ignore-scripts');
+	execFileSync('npm', args, {
 		stdio: 'inherit',
 	});
 }
