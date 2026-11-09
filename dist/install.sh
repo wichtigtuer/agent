@@ -22,7 +22,8 @@ BASE_URL="https://github.com/wichtigtuer/agent/releases/download/${VERSION}"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agent"
 BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
 
-if [[ "$VERSION" == @VERSION@ ]]; then
+# Note: split the placeholder so the release-time sed does not substitute it here.
+if [[ "$VERSION" == "@VERSI""ON@" ]]; then
 	echo "error: this install.sh is a template — download a released copy:" >&2
 	echo "  https://github.com/wichtigtuer/agent/releases" >&2
 	exit 1
