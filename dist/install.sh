@@ -40,7 +40,14 @@ curl -fsSL "$BASE_URL/Makefile" -o "$tmp/Makefile"
 curl -fsSL "$BASE_URL/agent-wichtigtuer" -o "$tmp/agent-wichtigtuer"
 
 echo "Verifying checksums"
-(cd "$tmp" && sha256sum -c checksums.txt)
+# checksums.txt also covers install.sh; verify only the files we downloaded.
+grep -E ' (Makefile|agent-wichtigtuer)$' "$tmp/checksums.txt" > "$tmp/checksums.install.txt"
+# sha256sum is GNU coreutils; macOS ships shasum instead.
+if command -v sha256sum >/dev/null 2>&1; then
+	(cd "$tmp" && sha256sum -c checksums.install.txt)
+else
+	(cd "$tmp" && shasum -a 256 -c checksums.install.txt)
+fi
 
 install -m 644 "$tmp/Makefile" "$CONFIG_DIR/Makefile"
 install -m 755 "$tmp/agent-wichtigtuer" "$BIN_DIR/agent-wichtigtuer"
