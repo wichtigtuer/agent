@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "skills": {
+    "github-cli": {
+      "source": "wichtigtuer/skills",
+      "sourceType": "github",
+      "skillPath": "skills/github-cli/SKILL.md",
+      "computedHash": "2505e4d208be87f785fb064dfb2a8f4afbdc23da3d5ad3c1911d3b0bfc825f20",
+      "installMode": "copy"
+    },
+    "github-issues-workflow": {
+      "source": "wichtigtuer/skills",
+      "sourceType": "github",
+      "skillPath": "skills/github-issues-workflow/SKILL.md",
+      "computedHash": "25ccc2eeee1f91035b763b331386bab50700511929abe93ae8afd4814a206e7a",
+      "installMode": "copy"
+    }
+  }
+}

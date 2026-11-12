@@ -6,6 +6,7 @@
   "dependencies": {
     "@clack/prompts": "1.8.1",
     "@earendil-works/pi-coding-agent": "1.5.0",
-    "pnpm": "12.18.0"
+    "pnpm": "12.18.0",
+    "skills": "1.8.1"
   }
 }
