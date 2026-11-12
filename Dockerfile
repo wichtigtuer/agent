@@ -56,9 +56,16 @@ RUN printf '#!/bin/sh\nexec node --experimental-strip-types /opt/wichtigtuer/set
 
 WORKDIR /app
 
-# Bake agent skills into the node user's home directory
-COPY .agents/skills /home/node/.agents/skills
-RUN chown -R node:node /home/node/.agents
+# Bake agent skills into the image: restore them from skills-lock.json with
+# the `skills` package (installed globally from package.json earlier in the
+# build), then place them in the node user's home directory
+COPY skills-lock.json /opt/skills/skills-lock.json
+WORKDIR /opt/skills
+RUN mkdir -p /home/node/.agents \
+	&& skills install -y -a pi --frozen-lockfile \
+	&& mv /opt/skills/.agents/skills /home/node/.agents/skills \
+	&& chown -R node:node /home/node/.agents
+WORKDIR /app
 
 USER node
 
